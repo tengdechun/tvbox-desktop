@@ -20,11 +20,53 @@ jobs:
       with:
         python-version: '3.11'
 
-    - name: Install dependencies
+    - name: Install core dependencies
       run: |
         python -m pip install --upgrade pip
-        pip install -r requirements.txt
-        pip install pyinstaller
+        pip install pywebview>=4.0
+        pip install requests>=2.28
+        pip install quickjs>=1.19
+        pip install pyinstaller>=5.0
+        pip install pystray>=0.19
+        pip install Pillow>=9.0
+        pip install clipboard>=0.0.4
+        pip install pywin32>=305
+        pip install pythonnet>=3.0
+
+    - name: Install optional dependencies (JAR source support)
+      continue-on-error: true
+      run: |
+        pip install JPype1>=1.5.0
+        pip install enjarify-adapter>=1.0.0
+
+    - name: Verify dependencies
+      run: |
+        python -c "import webview; print('pywebview OK')"
+        python -c "import requests; print('requests OK')"
+        python -c "import quickjs; print('quickjs OK')"
+        python -c "import pystray; print('pystray OK')"
+        python -c "import PIL; print('Pillow OK')"
+        python -c "import clipboard; print('clipboard OK')"
+        python -c "import win32api; print('pywin32 OK')"
+        python -c "import clr; print('pythonnet OK')"
+        python -c "import jpype; print('JPype1 OK')" 2>$null
+        python -c "import enjarify; print('enjarify OK')" 2>$null
+
+    - name: Verify all project modules import
+      run: |
+        python -c "from config import Config; print('config OK')"
+        python -c "from spider import SpiderManager; print('spider OK')"
+        python -c "from jar_spider import is_jar_support_available; print('jar_spider OK')"
+        python -c "from live import LiveParser; print('live OK')"
+        python -c "from proxy import ProxyServer; print('proxy OK')"
+        python -c "from database import Database; print('database OK')"
+        python -c "from parser import ParseEngine; print('parser OK')"
+        python -c "from epg import EpgParser; print('epg OK')"
+        python -c "from sniffer import Sniffer; print('sniffer OK')"
+        python -c "from downloader import DownloadManager; print('downloader OK')"
+        python -c "from tray import SystemTray; print('tray OK')"
+        python -c "from network import HttpClient; print('network OK')"
+        python -c "from remote import RemoteServer; print('remote OK')"
 
     - name: Generate icon if missing
       run: |

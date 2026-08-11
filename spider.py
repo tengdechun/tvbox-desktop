@@ -1391,42 +1391,152 @@ class JsSpider(BaseSpider):
 
 
 class JarSpider(BaseSpider):
-    """Type 1 —— JAR 源 (不支持, 桌面端无法运行 Dalvik 字节码)
-    所有方法返回错误信息, 提示用户使用 API(Type0) 或 JS(Type4) 源
+    """Type 1 —— JAR 源
+    通过 JPype 加载 Java Spider 类, 支持 TVBox/CatVod JAR 源
+    自动处理 DEX 到 JVM 字节码的转换
+    需要: pip install JPype1 + JRE/JDK 11+
     """
 
     def __init__(self, site: Site):
         self.site = site
+        self._engine = None
+        self._spider_instance = None
+        self._init_error = ""
+        self._jar_url = ""
+        self._class_name = ""
+        self._ext = site.ext if site.ext else ""
 
-    def home_content(self, filter: list = None) -> dict:
-        return {"error": "JAR 源(Type1)不支持桌面端, 请使用 API(Type0)或 JS(Type4)源"}
+        # 解析 JAR URL: 站点 jar 优先, 其次全局 spider jar
+        from jar_spider import get_engine, is_jar_support_available
 
-    def home_video_content(self) -> dict:
-        return {"error": "JAR 源不支持"}
+        self._engine = get_engine()
+        self._available = is_jar_support_available()
 
-    def category_content(self, tid: str, pg: int = 1, filter: dict = None, extend: dict = None) -> dict:
-        return {"error": "JAR 源不支持"}
+        if not self._available:
+            self._init_error = (
+                "JAR 源支持未启用。需要安装 JPype1: pip install JPype1, "
+                "以及 Java 运行时 (JRE/JDK 11+)"
+            )
+            return
 
-    def search_content(self, key: str, quick: bool = False, pg: int = 1) -> dict:
-        return {"error": "JAR 源不支持"}
-
-    def detail_content(self, ids: list) -> dict:
-        return {"error": "JAR 源不支持"}
-
-    def player_content(self, flag: str, id: str, vip_flags: list = None) -> dict:
-        return {"error": "JAR 源不支持", "parse": 0, "url": id, "header": "", "flag": flag}
-
-    def live_content(self, url: str) -> str:
+    def _resolve_jar_url(self, global_jar: str = "") -> str:
+        """解析 JAR URL: 站点 jar > 全局 spider jar"""
+        if self.site.jar:
+            return self.site.jar
+        if global_jar:
+            return global_jar
         return ""
 
+    def _resolve_class_name(self) -> str:
+        """解析 Spider 类名
+
+        TVBox 约定:
+        - site.api = "csp_XXX" -> 类名 com.github.catvod.spider.XXX
+        - site.api = 完整类名 -> 直接使用
+        - site.api = URL -> 从 URL 路径推断
+        """
+        api = self.site.api or ""
+        if api.startswith("csp_"):
+            return api
+        if "." in api and not api.startswith("http"):
+            return api
+        # 从 key 推断
+        return "csp_" + self.site.key
+
+    def _ensure_spider(self, global_jar: str = "") -> bool:
+        """确保 Spider 实例已加载"""
+        if self._spider_instance is not None:
+            return True
+        if self._init_error:
+            return False
+
+        jar_url = self._resolve_jar_url(global_jar)
+        if not jar_url:
+            self._init_error = "未配置 JAR 文件路径 (需要 site.jar 或全局 spider 配置)"
+            return False
+
+        class_name = self._resolve_class_name()
+
+        try:
+            self._spider_instance = self._engine.load_spider(
+                jar_url, class_name, self._ext
+            )
+            self._jar_url = jar_url
+            self._class_name = class_name
+            return True
+        except Exception as e:
+            self._init_error = str(e)
+            print("[JarSpider] 加载失败: " + str(e))
+            return False
+
+    def set_global_jar(self, jar: str):
+        """设置全局 JAR (由 SpiderManager 调用)"""
+        if not self.site.jar and jar:
+            self._global_jar = jar
+
+    def home_content(self, filter: list = None) -> dict:
+        if not self._ensure_spider(getattr(self, "_global_jar", "")):
+            return {"error": self._init_error}
+        return self._engine.call_home_content(
+            self._spider_instance, bool(filter)
+        )
+
+    def home_video_content(self) -> dict:
+        if not self._ensure_spider(getattr(self, "_global_jar", "")):
+            return {"error": self._init_error}
+        return self._engine.call_home_video_content(self._spider_instance)
+
+    def category_content(self, tid: str, pg: int = 1, filter: dict = None, extend: dict = None) -> dict:
+        if not self._ensure_spider(getattr(self, "_global_jar", "")):
+            return {"error": self._init_error}
+        return self._engine.call_category_content(
+            self._spider_instance, tid, pg, bool(filter), extend
+        )
+
+    def search_content(self, key: str, quick: bool = False, pg: int = 1) -> dict:
+        if not self._ensure_spider(getattr(self, "_global_jar", "")):
+            return {"error": self._init_error}
+        return self._engine.call_search_content(
+            self._spider_instance, key, quick, pg
+        )
+
+    def detail_content(self, ids: list) -> dict:
+        if not self._ensure_spider(getattr(self, "_global_jar", "")):
+            return {"error": self._init_error}
+        return self._engine.call_detail_content(self._spider_instance, ids)
+
+    def player_content(self, flag: str, id: str, vip_flags: list = None) -> dict:
+        if not self._ensure_spider(getattr(self, "_global_jar", "")):
+            return {"error": self._init_error, "parse": 0, "url": id, "header": "", "flag": flag}
+        result = self._engine.call_player_content(
+            self._spider_instance, flag, id, vip_flags or []
+        )
+        if "error" not in result:
+            result.setdefault("parse", 0)
+            result.setdefault("url", id)
+            result.setdefault("header", {})
+            result.setdefault("flag", flag)
+        return result
+
+    def live_content(self, url: str) -> str:
+        if not self._ensure_spider(getattr(self, "_global_jar", "")):
+            return ""
+        return self._engine.call_live_content(self._spider_instance, url)
+
     def is_video_format(self, url: str) -> bool:
-        return False
+        if not self._ensure_spider(getattr(self, "_global_jar", "")):
+            return False
+        return self._engine.call_is_video_format(self._spider_instance, url)
 
     def manual_video_check(self) -> bool:
-        return False
+        if not self._ensure_spider(getattr(self, "_global_jar", "")):
+            return False
+        return self._engine.call_manual_video_check(self._spider_instance)
 
     def destroy(self):
-        pass
+        if self._spider_instance and self._engine:
+            self._engine.call_destroy(self._spider_instance)
+        self._spider_instance = None
 
 
 class SpiderManager:
@@ -1464,8 +1574,10 @@ class SpiderManager:
             # 默认使用 ApiSpider
             spider = ApiSpider(site)
 
-        # 传递 jar 参数
-        if hasattr(spider, "jar") and not getattr(spider, "jar", ""):
+        # 传递全局 jar 参数 (JarSpider 需要全局 spider JAR)
+        if hasattr(spider, "set_global_jar"):
+            spider.set_global_jar(self._global_jar)
+        elif hasattr(spider, "jar") and not getattr(spider, "jar", ""):
             spider.jar = self._global_jar
 
         self._spiders[site.key] = spider
