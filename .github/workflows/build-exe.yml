@@ -1,0 +1,52 @@
+name: Build Windows EXE
+
+on:
+  push:
+    branches: [ main, master ]
+  pull_request:
+    branches: [ main, master ]
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: windows-latest
+
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Set up Python
+      uses: actions/setup-python@v5
+      with:
+        python-version: '3.11'
+
+    - name: Install dependencies
+      run: |
+        python -m pip install --upgrade pip
+        pip install -r requirements.txt
+        pip install pyinstaller
+
+    - name: Generate icon if missing
+      run: |
+        if (-not (Test-Path "static\icon.ico")) {
+          python -c "from PIL import Image, ImageDraw; img = Image.new('RGBA', (256, 256), (0,0,0,0)); d = ImageDraw.Draw(img); d.rounded_rectangle([26,26,230,230], radius=51, fill=(24,144,255,255)); d.polygon([(96,96),(96,160),(160,128)], fill=(255,255,255,255)); img.save('static/icon.ico', format='ICO', sizes=[(16,16),(32,32),(48,48),(64,64),(128,128),(256,256)]); img.save('static/icon.png')"
+        }
+
+    - name: Build EXE with PyInstaller
+      run: pyinstaller build.spec --noconfirm
+
+    - name: Upload EXE artifact
+      uses: actions/upload-artifact@v4
+      with:
+        name: TVBoxDesktop-Windows
+        path: dist/TVBoxDesktop.exe
+        if-no-files-found: error
+
+    - name: Show build info
+      run: |
+        Write-Host "=== Build Complete ==="
+        if (Test-Path "dist\TVBoxDesktop.exe") {
+          $size = (Get-Item "dist\TVBoxDesktop.exe").Length
+          $sizeMB = [math]::Round($size / 1MB, 2)
+          Write-Host "EXE Size: $sizeMB MB"
+        }
