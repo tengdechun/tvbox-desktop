@@ -77,18 +77,66 @@ jobs:
     - name: Build EXE with PyInstaller
       run: pyinstaller build.spec --noconfirm
 
-    - name: Upload EXE artifact
+    - name: Set up JDK 11 (for jlink)
+      uses: actions/setup-java@v4
+      with:
+        java-version: '11'
+        distribution: 'temurin'
+
+    - name: Create minimal JRE with jlink
+      run: |
+        $jlinkPath = "$env:JAVA_HOME\bin\jlink.exe"
+        Write-Host "Using jlink: $jlinkPath"
+
+        # 创建精简 JRE (~30MB), 包含 JAR Spider 所需的全部模块
+        & $jlinkPath `
+          --module-path "$env:JAVA_HOME\jmods" `
+          --add-modules java.base,java.xml,java.desktop,java.logging,java.management,java.naming,java.net.http,jdk.httpserver `
+          --output jre `
+          --strip-debug `
+          --no-header-files `
+          --no-man-pages `
+          --compress=2
+
+        Write-Host "=== JRE created ==="
+        $jreSize = (Get-ChildItem -Recurse jre | Measure-Object -Property Length -Sum).Sum
+        $jreMB = [math]::Round($jreSize / 1MB, 2)
+        Write-Host "Minimal JRE Size: $jreMB MB"
+
+    - name: Package zero-dependency bundle (EXE + JRE)
+      run: |
+        New-Item -ItemType Directory -Force -Path release\TVBoxDesktop
+        Copy-Item dist\TVBoxDesktop.exe release\TVBoxDesktop\
+        Copy-Item -Recurse jre release\TVBoxDesktop\jre
+        Compress-Archive -Path release\TVBoxDesktop\* -DestinationPath release\TVBoxDesktop-zero-dep.zip -Force
+
+        $zipSize = (Get-Item "release\TVBoxDesktop-zero-dep.zip").Length
+        $zipMB = [math]::Round($zipSize / 1MB, 2)
+        Write-Host "Zero-dependency bundle: $zipMB MB"
+
+    - name: Upload zero-dependency bundle
       uses: actions/upload-artifact@v4
       with:
-        name: TVBoxDesktop-Windows
+        name: TVBoxDesktop-ZeroDep
+        path: release/TVBoxDesktop-zero-dep.zip
+        if-no-files-found: error
+
+    - name: Upload standalone EXE (no JRE)
+      uses: actions/upload-artifact@v4
+      with:
+        name: TVBoxDesktop-Standalone
         path: dist/TVBoxDesktop.exe
         if-no-files-found: error
 
     - name: Show build info
       run: |
         Write-Host "=== Build Complete ==="
-        if (Test-Path "dist\TVBoxDesktop.exe") {
-          $size = (Get-Item "dist\TVBoxDesktop.exe").Length
-          $sizeMB = [math]::Round($size / 1MB, 2)
-          Write-Host "EXE Size: $sizeMB MB"
-        }
+        $exeSize = (Get-Item "dist\TVBoxDesktop.exe").Length
+        $exeMB = [math]::Round($exeSize / 1MB, 2)
+        Write-Host "Standalone EXE: $exeMB MB"
+        $jreSize = (Get-ChildItem -Recurse jre | Measure-Object -Property Length -Sum).Sum
+        $jreMB = [math]::Round($jreSize / 1MB, 2)
+        Write-Host "Minimal JRE: $jreMB MB"
+        $zipSize = (Get-Item "release\TVBoxDesktop-zero-dep.zip").Length
+        $zipMB = [math]::Round($zipSize / 1MB, 2)
+        Write-Host "Zero-dep bundle: $zipMB MB"

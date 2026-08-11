@@ -2,8 +2,9 @@
 JAR 爬虫引擎 —— 通过 JPype 加载 Java Spider 类
 支持 TVBox/CatVod JAR 源 (Type 1)
 自动处理 DEX 到 JVM 字节码的转换
+内嵌精简 JRE, 无需用户安装 Java
 需要安装: pip install JPype1
-可选安装: pip install enjarify (DEX 转换)
+可选安装: pip install enjarify-adapter (DEX 转换)
 """
 
 import os
@@ -13,6 +14,7 @@ import tempfile
 import subprocess
 import zipfile
 import shutil
+import platform
 from typing import Optional, Dict, Any, List
 
 import requests
@@ -25,6 +27,126 @@ try:
     _jpype_available = True
 except ImportError:
     pass
+
+
+# ======== 内嵌 JRE 检测 ========
+
+def _find_bundled_jre() -> Optional[str]:
+    """查找内嵌的 JRE 路径
+
+    查找顺序:
+    1. PyInstaller 打包后: _MEIPASS/jre/
+    2. 开发模式: 项目目录/jre/
+    3. 用户数据目录: %LOCALAPPDATA%/TVBoxDesktop/jre/
+    """
+    candidates = []
+
+    # PyInstaller 打包模式
+    if getattr(sys, 'frozen', False):
+        base = getattr(sys, '_MEIPASS', os.path.dirname(sys.executable))
+        candidates.append(os.path.join(base, 'jre'))
+        candidates.append(os.path.join(os.path.dirname(sys.executable), 'jre'))
+
+    # 开发模式
+    dev_dir = os.path.dirname(os.path.abspath(__file__))
+    candidates.append(os.path.join(dev_dir, 'jre'))
+
+    # 用户数据目录
+    if os.name == 'nt':
+        local_app = os.environ.get('LOCALAPPDATA', '')
+        if local_app:
+            candidates.append(os.path.join(local_app, 'TVBoxDesktop', 'jre'))
+    else:
+        candidates.append(os.path.join(os.path.expanduser('~'), '.tvboxdesktop', 'jre'))
+
+    for jre_dir in candidates:
+        jvm_path = _validate_jre_dir(jre_dir)
+        if jvm_path:
+            return jvm_path
+
+    return None
+
+
+def _validate_jre_dir(jre_dir: str) -> Optional[str]:
+    """验证 JRE 目录, 返回 jvm.dll/libjvm.so 路径"""
+    if not os.path.isdir(jre_dir):
+        return None
+
+    if os.name == 'nt':
+        # Windows: jre/bin/server/jvm.dll 或 jre/bin/client/jvm.dll
+        for pattern in ['bin/server/jvm.dll', 'bin/client/jvm.dll',
+                        'bin/server/jvm.dll', 'jvm.dll']:
+            path = os.path.join(jre_dir, pattern)
+            if os.path.exists(path):
+                return path
+        # 也检查 bin/java.exe
+        if os.path.exists(os.path.join(jre_dir, 'bin', 'java.exe')):
+            return jre_dir
+    else:
+        # Linux/Mac: lib/server/libjvm.so 或 lib/libjvm.so
+        for pattern in ['lib/server/libjvm.so', 'lib/libjvm.so',
+                        'lib/server/libjvm.dylib', 'lib/libjvm.dylib',
+                        'bin/java']:
+            path = os.path.join(jre_dir, pattern)
+            if os.path.exists(path):
+                return path
+
+    return None
+
+
+def _find_system_java() -> Optional[str]:
+    """查找系统安装的 Java"""
+    # 方法 1: jpype 自带的 JVM 查找
+    if _jpype_available:
+        try:
+            from jpype._jvmfinder import JVMFinder
+            finder = JVMFinder()
+            jvm_path = finder.get_jvm_path()
+            if jvm_path and os.path.exists(jvm_path):
+                return jvm_path
+        except Exception:
+            pass
+
+    # 方法 2: 检查 JAVA_HOME
+    java_home = os.environ.get('JAVA_HOME', '')
+    if java_home:
+        jvm = _validate_jre_dir(java_home)
+        if jvm:
+            return jvm
+
+    # 方法 3: 尝试 where/which java
+    try:
+        cmd = 'where java' if os.name == 'nt' else 'which java'
+        result = subprocess.run(cmd, shell=True, capture_output=True, text=True, timeout=5)
+        if result.returncode == 0 and result.stdout.strip():
+            java_path = result.stdout.strip().split('\n')[0].strip()
+            java_dir = os.path.dirname(os.path.dirname(java_path))
+            jvm = _validate_jre_dir(java_dir)
+            if jvm:
+                return jvm
+    except Exception:
+        pass
+
+    return None
+
+
+def _get_jvm_path() -> Optional[str]:
+    """获取 JVM 路径: 内嵌 JRE > 系统 Java"""
+    # 1. 优先使用内嵌 JRE
+    bundled = _find_bundled_jre()
+    if bundled:
+        return bundled
+
+    # 2. 回退到系统 Java
+    system_java = _find_system_java()
+    if system_java:
+        return system_java
+
+    return None
+
+
+# 存储找到的 JVM 路径
+_jvm_path_cache: Optional[str] = None
 
 
 # ======== CatVod API 桩 Java 源代码 ========
@@ -101,10 +223,13 @@ class JarSpiderEngine:
 
     def get_requirements_message(self) -> str:
         """返回安装提示"""
+        jvm = _get_jvm_path()
+        if jvm:
+            return "JAR 源就绪: 已检测到 Java 运行时 (" + jvm + ")"
         return (
-            "JAR 源支持需要安装 JPype1: pip install JPype1\n"
-            "并需要安装 Java 运行时 (JRE/JDK 11+)\n"
-            "如需支持 DEX 格式 JAR, 请安装 dex2jar 或 enjarify"
+            "JAR 源需要 Java 运行时 (JRE/JDK 11+)\n"
+            "请将精简 JRE 放在 EXE 同级 jre/ 目录下, 或安装系统 Java\n"
+            "DEX 格式 JAR 还需 dex2jar 或 enjarify"
         )
 
     # ======== JAR 下载与缓存 ========
@@ -335,7 +460,10 @@ class JarSpiderEngine:
     # ======== JVM 管理 ========
 
     def _start_jvm(self, classpath: List[str]):
-        """启动 JVM (如果尚未启动)"""
+        """启动 JVM (如果尚未启动)
+
+        优先使用内嵌精简 JRE, 其次使用系统 Java
+        """
         if not _jpype_available:
             raise RuntimeError("JPype 未安装, 请运行: pip install JPype1")
 
@@ -344,11 +472,25 @@ class JarSpiderEngine:
             self._add_to_classpath(classpath)
             return
 
+        global _jvm_path_cache
+        if _jvm_path_cache is None:
+            _jvm_path_cache = _get_jvm_path()
+
+        jvm_args = {
+            'classpath': classpath,
+            'convertStrings': True,
+        }
+        if _jvm_path_cache:
+            jvm_args['jvmpath'] = _jvm_path_cache
+
         try:
-            jpype.startJVM(classpath=classpath, convertStrings=True)
+            jpype.startJVM(**jvm_args)
             self._jvm_classpaths = list(classpath)
         except Exception as e:
-            raise RuntimeError("JVM 启动失败: " + str(e))
+            raise RuntimeError(
+                "JVM 启动失败: " + str(e) +
+                "\n请确保已安装 Java 11+ 或内嵌 JRE 可用"
+            )
 
     def _add_to_classpath(self, new_paths: List[str]):
         """向已运行的 JVM 添加 classpath 条目"""
@@ -620,11 +762,13 @@ def is_jar_support_available() -> bool:
 
 def get_install_guide() -> str:
     """返回安装指南"""
+    jvm = _get_jvm_path()
+    if jvm:
+        return "JAR 源已就绪, 无需额外安装。Java 运行时: " + jvm
     return (
-        "JAR 源支持需要以下组件:\n"
-        "1. JPype1: pip install JPype1\n"
-        "2. Java 运行时 (JRE/JDK 11+): https://adoptium.net/\n"
-        "3. (可选) DEX 转换工具 (用于 Android 专用 JAR):\n"
-        "   - dex2jar: https://github.com/pxb1988/dex2jar/releases\n"
-        "   - 或 enjarify: pip install enjarify"
+        "JAR 源需要 Java 运行时 (JRE/JDK 11+):\n"
+        "方式1 (推荐): 将精简 JRE 放在 EXE 同级 jre/ 目录下\n"
+        "  - 使用 jlink 创建: jlink --add-modules java.base,java.xml,... --output jre\n"
+        "方式2: 安装系统 Java: https://adoptium.net/\n"
+        "(可选) DEX 转换: dex2jar 或 pip install enjarify"
     )
