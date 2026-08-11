@@ -140,6 +140,7 @@
                             <button class="live-ctrl-btn" id="live-prev-btn" title="上一个频道">上一台</button>
                             <button class="live-ctrl-btn" id="live-next-btn" title="下一个频道">下一台</button>
                             <button class="live-ctrl-btn" id="live-fav-btn" title="收藏频道">收藏</button>
+                            <button class="live-ctrl-btn hidden" id="live-catchup-btn" title="时移回看">时移</button>
                             <span id="live-channel-name" class="live-channel-label"></span>
                         </div>
                         <div id="live-epg" class="live-epg"></div>
@@ -327,6 +328,15 @@
                                 </label>
                             </div>
                         </div>
+                        <div class="settings-row">
+                            <span class="settings-row-label">无痕模式</span>
+                            <div class="settings-row-value">
+                                <label class="switch-label">
+                                    <input type="checkbox" id="incognito-toggle">
+                                    <span class="switch-slider"></span>
+                                </label>
+                            </div>
+                        </div>
                     </div>
 
                     <h2>下载设置</h2>
@@ -361,6 +371,18 @@
                         <p class="form-hint">加载配置后可管理站点</p>
                     </div>
 
+                    <h2>嗅探规则</h2>
+                    <div id="sniff-rules-section" class="site-management">
+                        <div class="form-group">
+                            <div class="input-row">
+                                <input type="text" id="sniff-rule-host" placeholder="域名正则" class="input-full" style="flex:1">
+                                <input type="text" id="sniff-rule-regex" placeholder="URL提取正则" class="input-full" style="flex:1">
+                                <button id="add-sniff-rule-btn" class="btn-sm">添加</button>
+                            </div>
+                        </div>
+                        <div id="sniff-rules-list" class="saved-list"></div>
+                    </div>
+
                     <h2>配置备份</h2>
                     <div class="form-group">
                         <div class="input-row">
@@ -387,6 +409,14 @@
                         <div class="shortcut-row"><kbd>双击</kbd> 全屏切换</div>
                         <div class="shortcut-row"><kbd>滚轮</kbd> 音量调节</div>
                         <div class="shortcut-row"><kbd>右键</kbd> 播放器菜单</div>
+                    </div>
+
+                    <h2>远程控制</h2>
+                    <div class="about-info">
+                        <p>本地API地址: <span id="remote-api-url">未启动</span></p>
+                        <p>设备名称: <span id="remote-device-name">-</span></p>
+                        <p>设备IP: <span id="remote-device-ip">-</span></p>
+                        <p class="form-hint">同一局域网设备可通过此地址远程控制播放</p>
                     </div>
 
                     <h2>关于</h2>
@@ -584,7 +614,15 @@
                     <option value="large">大</option>
                 </select>
             </div>
-            <div id="danmaku-search-results" class="danmaku-search-results"></div>
+            <div class="form-group">
+                        <label>自定义弹幕API</label>
+                        <div class="input-row">
+                            <input type="text" id="custom-danmaku-api" placeholder="https://api.example.com/danmaku?name={name}&episode={episode}" class="input-full">
+                            <button id="save-danmaku-api-btn" class="btn-sm">保存</button>
+                        </div>
+                        <p class="form-hint">支持 {name} 和 {episode} 变量, 留空使用默认 dandanplay API</p>
+                    </div>
+                    <div id="danmaku-search-results" class="danmaku-search-results"></div>
         </div>
     </div>
 
@@ -614,10 +652,35 @@
         </div>
     </div>
 
+    <!-- 频道密码弹窗 -->
+    <div id="channel-password-modal" class="modal hidden">
+        <div class="modal-backdrop"></div>
+        <div class="modal-content" style="max-width:360px;padding:24px;">
+            <h2>请输入密码</h2>
+            <div class="form-group">
+                <input type="password" id="channel-password-input" placeholder="频道组密码" class="input-full" style="text-align:center;font-size:18px;">
+            </div>
+            <div class="input-row" style="justify-content:flex-end;">
+                <button class="btn-sm" onclick="App.cancelChannelPassword()">取消</button>
+                <button class="btn-primary" onclick="App.submitChannelPassword()">确认</button>
+            </div>
+        </div>
+    </div>
+
     <!-- 加载指示器 -->
     <div id="loading" class="loading hidden">
         <div class="spinner"></div>
         <p id="loading-text">加载中...</p>
+    </div>
+
+    <!-- 启动公告弹窗 -->
+    <div id="notice-modal" class="modal hidden">
+        <div class="modal-backdrop"></div>
+        <div class="modal-content notice-panel">
+            <h2>公告</h2>
+            <div id="notice-content" class="notice-content"></div>
+            <button class="btn-primary" onclick="document.getElementById('notice-modal').classList.add('hidden')">我知道了</button>
+        </div>
     </div>
 
     <!-- Toast 容器 -->

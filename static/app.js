@@ -19,6 +19,7 @@ const App = {
     currentLine: 0,
     currentPlayUrl: '',
     currentPlayFlag: '',
+    currentPlayVid: '',
     liveData: null,
     currentLiveChannel: null,
     currentLiveGroup: null,
@@ -57,6 +58,12 @@ const App = {
     isSeeking: false,
     controlsHideTimer: null,
     lastMouseMove: 0,
+    // TVBox 原版补全状态
+    incognitoMode: false,
+    siteStyles: {},
+    autoSwitching: false,
+    mediaStatusTimer: null,
+    unlockedGroups: new Set(),
 
     // ======== 初始化 ========
 
@@ -145,6 +152,132 @@ const App = {
 
         // 启动下载进度刷新
         this.startDownloadTimer();
+
+        // 加载壁纸
+        await this.loadWallpaper();
+
+        // 加载启动公告
+        await this.loadNotice();
+
+        // 恢复无痕模式状态
+        await this.restoreIncognitoMode();
+
+        // 启动远程控制状态上报
+        this.startMediaStatusReport();
+    },
+
+    // ======== 壁纸系统 ========
+
+    async loadWallpaper() {
+        try {
+            const result = await this.call('get_wallpaper');
+            if (result && result.ok && result.url) {
+                const url = result.url.trim();
+                if (url) {
+                    document.body.style.backgroundImage = `url("${url}")`;
+                    document.body.style.backgroundSize = 'cover';
+                    document.body.style.backgroundPosition = 'center';
+                    document.body.style.backgroundAttachment = 'fixed';
+                }
+            }
+        } catch (e) {
+            console.error('加载壁纸失败:', e);
+        }
+    },
+
+    // ======== 启动公告 ========
+
+    async loadNotice() {
+        try {
+            const result = await this.call('get_notice');
+            if (result && result.ok && result.notice && result.notice.trim()) {
+                this.showNoticeModal(result.notice.trim());
+            }
+        } catch (e) {
+            console.error('加载公告失败:', e);
+        }
+    },
+
+    showNoticeModal(notice) {
+        let modal = document.getElementById('notice-modal');
+        if (!modal) {
+            modal = document.createElement('div');
+            modal.id = 'notice-modal';
+            modal.className = 'modal';
+            modal.innerHTML = `
+                <div class="modal-backdrop"></div>
+                <div class="modal-content" style="max-width:480px;padding:24px;">
+                    <h2 style="margin-bottom:16px;">公告</h2>
+                    <div id="notice-content" style="white-space:pre-wrap;line-height:1.6;margin-bottom:20px;max-height:60vh;overflow-y:auto;"></div>
+                    <button id="notice-close-btn" class="btn-primary" style="width:100%;">我知道了</button>
+                </div>
+            `;
+            document.body.appendChild(modal);
+            modal.querySelector('.modal-backdrop').addEventListener('click', () => {
+                modal.classList.add('hidden');
+            });
+        }
+        document.getElementById('notice-content').textContent = notice;
+        modal.classList.remove('hidden');
+        const closeBtn = document.getElementById('notice-close-btn');
+        closeBtn.onclick = () => modal.classList.add('hidden');
+    },
+
+    // ======== 无痕模式 ========
+
+    async restoreIncognitoMode() {
+        try {
+            const result = await this.call('is_incognito');
+            if (result && result.ok) {
+                this.incognitoMode = result.enabled;
+                const toggle = document.getElementById('incognito-toggle');
+                if (toggle) toggle.checked = this.incognitoMode;
+            }
+        } catch (e) {
+            console.error('恢复无痕模式状态失败:', e);
+        }
+    },
+
+    async toggleIncognito(enabled) {
+        try {
+            const result = await this.call('set_incognito', enabled);
+            if (result && result.ok) {
+                this.incognitoMode = result.enabled;
+                this.toast(this.incognitoMode ? '无痕模式已开启' : '无痕模式已关闭');
+            }
+        } catch (e) {
+            this.toast('设置无痕模式失败', 'error');
+        }
+    },
+
+    // ======== 远程控制状态上报 ========
+
+    startMediaStatusReport() {
+        if (this.mediaStatusTimer) clearInterval(this.mediaStatusTimer);
+        this.mediaStatusTimer = setInterval(() => {
+            this.reportMediaStatus();
+        }, 15000);
+    },
+
+    async reportMediaStatus() {
+        try {
+            const video = document.getElementById('video-player');
+            if (!video || !this.currentDetail) return;
+            const status = {
+                type: 'vod',
+                vod_name: this.currentDetail.vod_name || '',
+                site_key: this.currentSiteKey || '',
+                position: Math.floor(video.currentTime || 0),
+                duration: Math.floor(video.duration || 0),
+                is_playing: !video.paused,
+                volume: Math.round((video.volume || 0) * 100),
+                ep_index: this.currentEpIndex,
+                line_index: this.currentLine,
+            };
+            await this.call('set_media_status', JSON.stringify(status));
+        } catch (e) {
+            // 静默失败
+        }
     },
 
     // ======== 导航 ========
@@ -368,6 +501,18 @@ const App = {
             });
         }
 
+        // 无痕模式开关
+        const incognitoToggle = document.getElementById('incognito-toggle');
+        if (incognitoToggle) {
+            incognitoToggle.addEventListener('change', async (e) => {
+                await this.toggleIncognito(e.target.checked);
+            });
+        }
+
+        // 嗅探规则管理
+        document.getElementById('refresh-sniff-rules-btn')?.addEventListener('click', () => this.renderSniffRules());
+        document.getElementById('add-sniff-rule-btn')?.addEventListener('click', () => this.addSniffRule());
+
         // 配置导入导出
         document.getElementById('export-config-btn')?.addEventListener('click', async () => {
             const result = await this.call('export_config');
@@ -427,6 +572,17 @@ const App = {
         await this.renderSavedConfigs();
         await this.renderParses();
         await this.renderSiteManagement(s.sites);
+        await this.renderSniffRules();
+
+        // 保存站点样式配置
+        this.siteStyles = {};
+        if (s.sites) {
+            s.sites.forEach(site => {
+                if (site.style) {
+                    this.siteStyles[site.key] = site.style;
+                }
+            });
+        }
 
         if (s.lives && s.lives.length > 0) {
             document.getElementById('live-url').value = s.lives[0].url;
@@ -561,14 +717,17 @@ const App = {
 
         for (const site of sites) {
             const disabled = await this.call('get_setting', `site_disabled_${site.key}`, '0');
+            const hidden = await this.call('get_setting', `site_hidden_${site.key}`, String(site.hide || 0));
             const item = document.createElement('div');
-            item.className = 'site-mgmt-item' + (disabled === '1' ? ' disabled' : '');
+            item.className = 'site-mgmt-item' + (disabled === '1' ? ' disabled' : '') + (hidden === '1' ? ' hidden-site' : '');
             item.innerHTML = `
                 <div class="sm-name">
                     <span class="sm-type type-${site.type}">${this.getSiteTypeLabel(site.type)}</span>
                     ${this.escape(site.name)}
+                    ${hidden === '1' ? '<span style="font-size:11px;opacity:0.5;margin-left:4px;">(已隐藏)</span>' : ''}
                 </div>
                 <div class="sm-actions">
+                    <button class="btn-sm sm-hide-btn" data-key="${site.key}" title="${hidden === '1' ? '显示' : '隐藏'}">${hidden === '1' ? '显示' : '隐藏'}</button>
                     <label class="switch-label">
                         <input type="checkbox" class="site-toggle" data-key="${site.key}" ${disabled !== '1' ? 'checked' : ''}>
                         <span class="switch-slider"></span>
@@ -580,7 +739,7 @@ const App = {
 
         container.appendChild(list);
 
-        // 绑定开关事件
+        // 绑定开关事件 (启用/禁用)
         container.querySelectorAll('.site-toggle').forEach(toggle => {
             toggle.addEventListener('change', async (e) => {
                 const key = e.target.dataset.key;
@@ -590,11 +749,94 @@ const App = {
                 this.toast(e.target.checked ? '站点已启用' : '站点已禁用');
             });
         });
+
+        // 绑定隐藏/显示切换事件
+        container.querySelectorAll('.sm-hide-btn').forEach(btn => {
+            btn.addEventListener('click', async (e) => {
+                const key = e.target.dataset.key;
+                const result = await this.call('toggle_site_hide', key);
+                if (result && result.ok) {
+                    this.toast(result.hidden ? '站点已隐藏' : '站点已显示');
+                    // 重新渲染站点管理
+                    this.renderSiteManagement(sites);
+                    // 重新渲染首页站点选择器 (需重新获取站点)
+                    const allSites = await this.call('get_sites');
+                    // 合并 style 信息
+                    if (allSites) {
+                        allSites.forEach(s => {
+                            const orig = sites.find(os => os.key === s.key);
+                            if (orig) s.style = orig.style;
+                        });
+                        this.renderSites(allSites);
+                    }
+                } else {
+                    this.toast(result?.error || '操作失败', 'error');
+                }
+            });
+        });
     },
 
     getSiteTypeLabel(type) {
         const labels = { 0: 'API', 1: 'JAR', 3: 'PY', 4: 'JS' };
         return labels[type] || type;
+    },
+
+    // ======== 嗅探规则管理 ========
+
+    async renderSniffRules() {
+        const container = document.getElementById('sniff-rules-list');
+        if (!container) return;
+        container.innerHTML = '<p class="form-hint">加载中...</p>';
+
+        try {
+            const rules = await this.call('get_sniff_rules');
+            container.innerHTML = '';
+
+            if (!rules || rules.length === 0) {
+                container.innerHTML = '<p class="form-hint">暂无嗅探规则</p>';
+                return;
+            }
+
+            rules.forEach((rule, idx) => {
+                const el = document.createElement('div');
+                el.className = 'sniff-rule-item';
+                const host = rule.host || '未指定';
+                const regexList = (rule.regex || []).join(', ') || '无';
+                const excludeList = (rule.exclude || []).join(', ') || '无';
+                el.innerHTML = `
+                    <div class="sr-info">
+                        <div class="sr-host">${this.escape(host)}</div>
+                        <div class="sr-detail" style="font-size:12px;opacity:0.7;">
+                            正则: ${this.escape(regexList)} | 排除: ${this.escape(excludeList)}
+                        </div>
+                    </div>
+                `;
+                container.appendChild(el);
+            });
+        } catch (e) {
+            container.innerHTML = '<p class="form-hint">加载嗅探规则失败</p>';
+        }
+    },
+
+    async addSniffRule() {
+        const host = prompt('请输入站点 Host (如: example.com):');
+        if (!host) return;
+        const regexStr = prompt('请输入嗅探正则 (多个用逗号分隔, 可留空):', '\\.mp4|\\.m3u8');
+        const rule = { host: host.trim() };
+        if (regexStr && regexStr.trim()) {
+            rule.regex = regexStr.split(',').map(r => r.trim()).filter(r => r);
+        }
+        try {
+            const result = await this.call('add_sniff_rule', JSON.stringify(rule));
+            if (result && result.ok) {
+                this.toast('嗅探规则已添加', 'success');
+                this.renderSniffRules();
+            } else {
+                this.toast(result?.error || '添加失败', 'error');
+            }
+        } catch (e) {
+            this.toast('添加嗅探规则失败', 'error');
+        }
     },
 
     // ======== 首页 ========
@@ -608,7 +850,14 @@ const App = {
             return;
         }
 
-        sites.forEach((site, idx) => {
+        // 过滤隐藏的站点 (hide=1 的站点不在首页显示)
+        const visibleSites = sites.filter(s => !s.hide || s.hide === 0);
+        if (visibleSites.length === 0) {
+            container.innerHTML = '<span class="placeholder">所有站点已隐藏</span>';
+            return;
+        }
+
+        visibleSites.forEach((site, idx) => {
             const chip = document.createElement('div');
             chip.className = 'site-chip' + (idx === 0 ? ' active' : '');
             chip.textContent = site.name;
@@ -620,7 +869,7 @@ const App = {
             container.appendChild(chip);
         });
 
-        this.loadHome(sites[0].key);
+        this.loadHome(visibleSites[0].key);
     },
 
     async loadHome(siteKey) {
@@ -773,17 +1022,47 @@ const App = {
             return;
         }
 
+        // 获取当前站点样式
+        const style = this.siteStyles[this.currentSiteKey] || { type: 'rect', ratio: 1.78 };
+        const cardType = style.type || 'rect';
+        const ratio = parseFloat(style.ratio) || 1.78;
+
+        // 根据样式类型设置 grid 布局
+        grid.classList.remove('card-rect', 'card-oval', 'card-list');
+        grid.classList.add('card-' + cardType);
+
         items.forEach(item => {
             const card = document.createElement('div');
-            card.className = 'vod-card';
-            card.innerHTML = `
-                <div class="poster">
-                    <img src="${item.vod_pic || this.placeholderImg()}" onerror="this.src='${this.placeholderImg()}'" loading="lazy">
-                    ${item.vod_remarks ? `<span class="remarks">${this.escape(item.vod_remarks)}</span>` : ''}
-                </div>
-                <div class="vod-name">${this.escape(item.vod_name)}</div>
-                <div class="vod-sub">${item.vod_year || ''} ${item.type_name || ''}</div>
-            `;
+            card.className = 'vod-card card-' + cardType;
+            // 根据宽高比设置海报比例
+            const posterStyle = ratio > 0
+                ? `style="aspect-ratio:${ratio};"`
+                : '';
+
+            if (cardType === 'list') {
+                // 列表样式: 横向排列
+                card.innerHTML = `
+                    <div class="poster list-poster" ${posterStyle}>
+                        <img src="${item.vod_pic || this.placeholderImg()}" onerror="this.src='${this.placeholderImg()}'" loading="lazy">
+                        ${item.vod_remarks ? `<span class="remarks">${this.escape(item.vod_remarks)}</span>` : ''}
+                    </div>
+                    <div class="vod-list-info">
+                        <div class="vod-name">${this.escape(item.vod_name)}</div>
+                        <div class="vod-sub">${item.vod_year || ''} ${item.type_name || ''}</div>
+                    </div>
+                `;
+            } else {
+                // rect / oval 样式
+                const posterClass = cardType === 'oval' ? 'poster oval-poster' : 'poster';
+                card.innerHTML = `
+                    <div class="${posterClass}" ${posterStyle}>
+                        <img src="${item.vod_pic || this.placeholderImg()}" onerror="this.src='${this.placeholderImg()}'" loading="lazy">
+                        ${item.vod_remarks ? `<span class="remarks">${this.escape(item.vod_remarks)}</span>` : ''}
+                    </div>
+                    <div class="vod-name">${this.escape(item.vod_name)}</div>
+                    <div class="vod-sub">${item.vod_year || ''} ${item.type_name || ''}</div>
+                `;
+            }
             card.addEventListener('click', () => {
                 this.showDetail(item.site_key || this.currentSiteKey, item.vod_id);
             });
@@ -923,8 +1202,19 @@ const App = {
         const keyword = document.getElementById('search-input').value.trim();
         if (!keyword) return;
 
+        // 繁转简: 搜索前转换关键词
+        let searchKeyword = keyword;
+        try {
+            const t2sResult = await this.call('t2s', keyword);
+            if (t2sResult && t2sResult.ok && t2sResult.text && t2sResult.text !== keyword) {
+                searchKeyword = t2sResult.text;
+            }
+        } catch (e) {
+            // 转换失败则使用原关键词
+        }
+
         this.showLoading('搜索中...');
-        const results = await this.call('search_all', keyword);
+        let results = await this.call('search_all', searchKeyword);
         this.hideLoading();
 
         // 刷新搜索历史
@@ -934,9 +1224,17 @@ const App = {
         const tabs = document.getElementById('search-site-tabs');
 
         if (!results || results.length === 0) {
-            tabs.innerHTML = '';
-            grid.innerHTML = '<div class="empty-state"><p>未找到结果</p></div>';
-            return;
+            // 如果使用了转换后的关键词且无结果, 尝试用原始关键词搜索
+            if (searchKeyword !== keyword) {
+                this.showLoading('尝试用原关键词搜索...');
+                results = await this.call('search_all', keyword);
+                this.hideLoading();
+            }
+            if (!results || results.length === 0) {
+                tabs.innerHTML = '';
+                grid.innerHTML = '<div class="empty-state"><p>未找到结果</p></div>';
+                return;
+            }
         }
 
         tabs.innerHTML = '';
@@ -998,7 +1296,18 @@ const App = {
         const vod = items[0];
         this.currentSiteKey = siteKey;
         this.currentDetail = vod;
-        this.currentEpisodes = this.parsePlayUrl(vod.vod_play_from, vod.vod_play_url);
+
+        // 集数解析增强: 优先使用后端 parse_episodes (支持多线路 + <300集倒序)
+        let episodes = null;
+        try {
+            const parsed = await this.call('parse_episodes', vod.vod_play_from || '', vod.vod_play_url || '');
+            if (parsed && parsed.ok && parsed.lines && parsed.lines.length > 0) {
+                episodes = parsed.lines;
+            }
+        } catch (e) {
+            // 后端解析失败, 回退到前端解析
+        }
+        this.currentEpisodes = episodes || this.parsePlayUrl(vod.vod_play_from, vod.vod_play_url);
 
         // 检查是否有播放历史
         const history = await this.call('get_history_item', vod.vod_id, siteKey);
@@ -1336,6 +1645,16 @@ const App = {
                 this.searchDanmaku();
             });
         }
+        // 打开弹幕设置时自动加载弹幕API配置
+        const danmakuSettingsModal = document.getElementById('danmaku-settings-modal');
+        if (danmakuSettingsModal) {
+            const observer = new MutationObserver(() => {
+                if (!danmakuSettingsModal.classList.contains('hidden')) {
+                    this.loadDanmakuApi();
+                }
+            });
+            observer.observe(danmakuSettingsModal, { attributes: true, attributeFilter: ['class'] });
+        }
         const danmakuOpacity = document.getElementById('danmaku-opacity');
         if (danmakuOpacity) {
             danmakuOpacity.addEventListener('input', (e) => {
@@ -1668,7 +1987,17 @@ const App = {
         const resultsContainer = document.getElementById('danmaku-search-results');
         resultsContainer.innerHTML = '<p class="form-hint">搜索中...</p>';
 
-        const results = await this.call('search_danmaku', keyword);
+        // 弹幕增强: 优先使用多来源搜索 (dandanplay + 自定义弹幕API)
+        let results = [];
+        try {
+            results = await this.call('search_danmaku_multi', keyword, this.currentEpIndex + 1);
+        } catch (e) {
+            // 回退到普通搜索
+        }
+        if (!results || results.length === 0) {
+            results = await this.call('search_danmaku', keyword);
+        }
+
         if (!results || results.length === 0) {
             resultsContainer.innerHTML = '<p class="form-hint">未找到匹配的弹幕</p>';
             return;
@@ -1678,8 +2007,9 @@ const App = {
         results.forEach(anime => {
             const item = document.createElement('div');
             item.className = 'danmaku-result-item';
+            const sourceLabel = anime.source ? `<span class="d-source" style="font-size:11px;opacity:0.6;margin-left:6px;">[${this.escape(anime.source)}]</span>` : '';
             item.innerHTML = `
-                <div class="d-title">${this.escape(anime.animeTitle)}</div>
+                <div class="d-title">${this.escape(anime.animeTitle)}${sourceLabel}</div>
                 <div class="d-sub">${this.escape(anime.type || '')} · 共${anime.episodes || 0}集</div>
             `;
             item.addEventListener('click', async () => {
@@ -1699,6 +2029,21 @@ const App = {
             });
             resultsContainer.appendChild(item);
         });
+    },
+
+    // 获取配置的弹幕API
+    async loadDanmakuApi() {
+        try {
+            const result = await this.call('get_danmaku_api');
+            if (result && result.ok && result.url) {
+                const input = document.getElementById('danmaku-url-input');
+                if (input && !input.value) {
+                    input.value = result.url;
+                }
+            }
+        } catch (e) {
+            // 静默失败
+        }
     },
 
     initDanmakuCanvas() {
@@ -2045,6 +2390,7 @@ const App = {
     async playVideo(siteKey, flag, vid, epIndex) {
         this.currentEpIndex = epIndex;
         this.currentPlayFlag = flag;
+        this.currentPlayVid = vid;
 
         document.querySelectorAll('.episode-item').forEach((el, idx) => {
             el.classList.toggle('playing', idx === epIndex);
@@ -2055,7 +2401,12 @@ const App = {
         this.hideLoading();
 
         if (data.error) {
-            this.toast(data.error, 'error');
+            // 播放失败自动换源
+            this.toast('播放地址解析失败, 正在尝试换源...', '');
+            const switched = await this.autoSwitchSource(siteKey, this.currentDetail?.vod_id || '', flag, vid);
+            if (!switched) {
+                this.toast(data.error, 'error');
+            }
             return;
         }
 
@@ -2081,12 +2432,18 @@ const App = {
 
         this.renderPlayerEpisodes();
 
-        // 保存播放历史
-        const sites = await this.call('get_sites');
-        const siteInfo = sites.find(s => s.key === siteKey);
-        await this.call('add_history', this.currentDetail.vod_id, this.currentDetail.vod_name,
-            this.currentDetail.vod_pic, siteKey, siteInfo?.name || '',
-            epIndex, ep?.name || '', vid, 0, 0, this.currentLine);
+        // 保存播放历史 (无痕模式下不记录)
+        if (!this.incognitoMode) {
+            try {
+                const sites = await this.call('get_sites');
+                const siteInfo = sites.find(s => s.key === siteKey);
+                await this.call('add_history', this.currentDetail.vod_id, this.currentDetail.vod_name,
+                    this.currentDetail.vod_pic, siteKey, siteInfo?.name || '',
+                    epIndex, ep?.name || '', vid, 0, 0, this.currentLine);
+            } catch (e) {
+                // 静默失败
+            }
+        }
 
         // 启动进度记录
         this.startHistoryTimer();
@@ -2104,12 +2461,63 @@ const App = {
         }
     },
 
+    // ======== 播放失败自动换源 ========
+
+    async autoSwitchSource(siteKey, vodId, flag, vid) {
+        if (this.autoSwitching) return false;
+        this.autoSwitching = true;
+        try {
+            this.toast('正在尝试其他线路或站点...', '');
+            const result = await this.call('auto_switch_source', siteKey, vodId, flag, vid);
+            if (result && result.ok && result.url) {
+                this.toast(`已换源: ${result.source === 'other_site' ? (result.site_name || '其他站点') : '其他线路'}`, 'success');
+
+                // 更新当前播放信息
+                this.currentPlayFlag = result.flag;
+                this.currentPlayVid = result.vid;
+                if (result.site_key && result.site_key !== siteKey) {
+                    this.currentSiteKey = result.site_key;
+                }
+
+                let playUrl = result.url;
+                const headers = result.header || {};
+                this.currentPlayUrl = playUrl;
+
+                if (headers && Object.keys(headers).length > 0) {
+                    const ua = headers['User-Agent'] || headers['user-agent'] || '';
+                    const ref = headers['Referer'] || headers['referer'] || '';
+                    playUrl = await this.call('build_proxy_url', playUrl, ua, ref);
+                }
+
+                this.closeDetail();
+                document.getElementById('player-modal').classList.remove('hidden');
+                await this.playStream(playUrl);
+
+                const line = this.currentEpisodes[this.currentLine];
+                const ep = line ? line.episodes[this.currentEpIndex] : null;
+                document.getElementById('player-info').textContent =
+                    `${this.currentDetail?.vod_name || ''} - ${ep ? ep.name : ''}`;
+                this.renderPlayerEpisodes();
+                this.startHistoryTimer();
+                return true;
+            }
+            return false;
+        } catch (e) {
+            console.error('自动换源失败:', e);
+            return false;
+        } finally {
+            this.autoSwitching = false;
+        }
+    },
+
     startHistoryTimer() {
         if (this.historyTimer) clearInterval(this.historyTimer);
         this.historyTimer = setInterval(async () => {
             const video = document.getElementById('video-player');
             if (!video || !this.currentDetail) return;
             if (video.currentTime > 0) {
+                // 无痕模式下不记录进度
+                if (this.incognitoMode) return;
                 await this.call('update_history_position',
                     this.currentDetail.vod_id, this.currentSiteKey,
                     Math.floor(video.currentTime), Math.floor(video.duration || 0));
@@ -2214,7 +2622,22 @@ const App = {
             video.src = url;
             video.play().catch(() => {
                 this.toast('播放失败', 'error');
+                this._handlePlaybackError();
             });
+        }
+
+        // 视频播放错误时自动换源
+        video.onerror = () => {
+            this._handlePlaybackError();
+        };
+    },
+
+    // 播放失败时尝试自动换源
+    _handlePlaybackError() {
+        if (this.autoSwitching) return;
+        if (this.currentDetail && this.currentSiteKey && this.currentPlayFlag && this.currentPlayVid) {
+            this.toast('播放失败, 正在尝试换源...', '');
+            this.autoSwitchSource(this.currentSiteKey, this.currentDetail.vod_id, this.currentPlayFlag, this.currentPlayVid);
         }
     },
 
@@ -2226,8 +2649,8 @@ const App = {
             this.call('set_setting', 'volume', String(vol));
         }
 
-        // 最后保存一次进度
-        if (video && this.currentDetail && video.currentTime > 0) {
+        // 最后保存一次进度 (无痕模式不保存)
+        if (video && this.currentDetail && video.currentTime > 0 && !this.incognitoMode) {
             this.call('update_history_position',
                 this.currentDetail.vod_id, this.currentSiteKey,
                 Math.floor(video.currentTime), Math.floor(video.duration || 0));
@@ -2468,10 +2891,20 @@ const App = {
 
         let groupsToShow = {};
         let groupNames = [];
+        let groupMeta = {}; // groupName -> {needs_password, password}
 
         if (this.liveTab === 'all') {
             groupsToShow = this.liveData.groups;
             groupNames = this.liveData.group_names || [];
+            // 从结构化 group_list 获取密码信息
+            if (this.liveData.group_list) {
+                this.liveData.group_list.forEach(g => {
+                    groupMeta[g.name] = {
+                        needs_password: g.needs_password,
+                        password: g.password || '',
+                    };
+                });
+            }
         } else if (this.liveTab === 'favorites') {
             this.call('get_live_favorites').then(favs => {
                 if (!favs || favs.length === 0) {
@@ -2484,7 +2917,7 @@ const App = {
                     if (!favGroup[g]) favGroup[g] = [];
                     favGroup[g].push({ name: f.channel_name, url: f.channel_url, logo: f.logo || '' });
                 });
-                this._renderLiveGroupList(favGroup, Object.keys(favGroup));
+                this._renderLiveGroupList(favGroup, Object.keys(favGroup), {});
             });
             return;
         } else if (this.liveTab === 'history') {
@@ -2497,24 +2930,41 @@ const App = {
                 history.forEach(h => {
                     histGroup['最近观看'].push({ name: h.channel_name, url: h.channel_url, logo: '' });
                 });
-                this._renderLiveGroupList(histGroup, Object.keys(histGroup));
+                this._renderLiveGroupList(histGroup, Object.keys(histGroup), {});
             });
             return;
         }
 
-        this._renderLiveGroupList(groupsToShow, groupNames);
+        this._renderLiveGroupList(groupsToShow, groupNames, groupMeta);
     },
 
-    _renderLiveGroupList(groups, groupNames) {
+    _renderLiveGroupList(groups, groupNames, groupMeta) {
         const container = document.getElementById('live-groups');
         container.innerHTML = '';
+        groupMeta = groupMeta || {};
 
         groupNames.forEach((name, idx) => {
             const channels = groups[name] || [];
+            const meta = groupMeta[name] || {};
+            const needsPassword = meta.needs_password && !this.unlockedGroups.has(name);
             const el = document.createElement('div');
-            el.className = 'live-group' + (idx === 0 ? ' active' : '');
-            el.textContent = `${name} (${channels.length})`;
-            el.addEventListener('click', () => {
+            el.className = 'live-group' + (idx === 0 && !needsPassword ? ' active' : '');
+            // 密码保护分组显示锁图标
+            const lockIcon = needsPassword
+                ? ' <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="12" height="12" style="vertical-align:middle;"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>'
+                : '';
+            el.innerHTML = `${this.escape(name)}${lockIcon} <span style="opacity:0.6">(${channels.length})</span>`;
+            el.addEventListener('click', async () => {
+                // 密码保护验证
+                if (needsPassword) {
+                    const password = prompt(`请输入「${name}」分组的密码:`);
+                    if (password === null) return; // 用户取消
+                    if (password !== meta.password) {
+                        this.toast('密码错误', 'error');
+                        return;
+                    }
+                    this.unlockedGroups.add(name);
+                }
                 document.querySelectorAll('.live-group').forEach(g => g.classList.remove('active'));
                 el.classList.add('active');
                 this.currentLiveGroup = name;
@@ -2525,9 +2975,22 @@ const App = {
         });
 
         if (groupNames.length > 0) {
-            this.currentLiveGroup = groupNames[0];
-            this.liveChannelList = groups[groupNames[0]] || [];
-            this.renderLiveChannels(groupNames[0], this.liveChannelList);
+            // 自动选中第一个不需要密码的分组
+            let firstIdx = 0;
+            for (let i = 0; i < groupNames.length; i++) {
+                const meta = groupMeta[groupNames[i]] || {};
+                if (!meta.needs_password || this.unlockedGroups.has(groupNames[i])) {
+                    firstIdx = i;
+                    break;
+                }
+            }
+            const firstName = groupNames[firstIdx];
+            const meta = groupMeta[firstName] || {};
+            if (!meta.needs_password || this.unlockedGroups.has(firstName)) {
+                this.currentLiveGroup = firstName;
+                this.liveChannelList = groups[firstName] || [];
+                this.renderLiveChannels(firstName, this.liveChannelList);
+            }
         }
     },
 
@@ -2536,22 +2999,247 @@ const App = {
         container.innerHTML = '';
 
         const chList = channels || (this.liveData.groups[groupName] || []);
+        // 从结构化数据中查找完整频道信息 (含 multi_urls, catchup 等)
+        const fullChannels = this._getFullChannels(groupName, chList);
+
         chList.forEach((ch, idx) => {
             const el = document.createElement('div');
             el.className = 'live-channel';
+            const fullCh = fullChannels[idx] || ch;
+            // 多线路备援显示标记
+            const multiBadge = (fullCh.multi_urls && fullCh.multi_urls.length > 0)
+                ? ` <span style="opacity:0.5;font-size:11px;">[${fullCh.multi_urls_count || (fullCh.multi_urls.length + 1)}]</span>`
+                : '';
+            // catchup 支持标记
+            const catchupBadge = (fullCh.catchup_source || fullCh.catchup_type)
+                ? ' <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="11" height="11" style="vertical-align:middle;" title="支持时移"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>'
+                : '';
             if (ch.logo) {
-                el.innerHTML = `<img src="${ch.logo}" class="live-channel-logo" onerror="this.style.display='none'">${this.escape(ch.name)}`;
+                el.innerHTML = `<img src="${ch.logo}" class="live-channel-logo" onerror="this.style.display='none'">${this.escape(ch.name)}${multiBadge}${catchupBadge}`;
             } else {
-                el.textContent = ch.name;
+                el.innerHTML = `${this.escape(ch.name)}${multiBadge}${catchupBadge}`;
             }
             el.addEventListener('click', () => {
                 document.querySelectorAll('.live-channel').forEach(c => c.classList.remove('active'));
                 el.classList.add('active');
                 this.liveChannelIndex = idx;
-                this.playLive(ch.url, ch.name);
+                this.playLiveChannel(fullCh, idx);
             });
             container.appendChild(el);
         });
+    },
+
+    // 从结构化数据中获取完整频道信息
+    _getFullChannels(groupName, chList) {
+        if (!this.liveData || !this.liveData.channels) return chList;
+        // 按 name 匹配完整频道
+        const nameMap = {};
+        this.liveData.channels.forEach(c => {
+            if (!nameMap[c.name]) nameMap[c.name] = c;
+        });
+        return chList.map(ch => {
+            const full = nameMap[ch.name];
+            if (full) {
+                return Object.assign({}, ch, full);
+            }
+            return ch;
+        });
+    },
+
+    // 多线路备援直播播放
+    async playLiveChannel(channel, idx) {
+        const name = channel.name;
+        // 获取所有备用 URL (主URL + multi_urls, 或 # 分隔)
+        let urls = [];
+        if (channel.url) {
+            // 支持 # 分隔多个 URL
+            urls = channel.url.split('#').filter(u => u.trim());
+        }
+        if (channel.multi_urls && channel.multi_urls.length > 0) {
+            channel.multi_urls.forEach(u => {
+                if (u && u.trim() && !urls.includes(u)) urls.push(u.trim());
+            });
+        }
+        if (urls.length === 0) {
+            this.toast('无有效播放地址', 'error');
+            return;
+        }
+
+        this.currentLiveChannel = { url: channel.url, name, channel };
+        this._liveUrls = urls;
+        this._liveUrlIndex = 0;
+
+        // 显示 catchup 按钮 (如果支持)
+        this._updateCatchupButton(channel);
+
+        // 逐个尝试播放
+        await this._playLiveUrl(urls[0], name);
+    },
+
+    async _playLiveUrl(url, name) {
+        const area = document.getElementById('live-player-area');
+        area.innerHTML = '<video id="live-video" controls autoplay></video>';
+        const video = document.getElementById('live-video');
+        const controls = document.getElementById('live-controls');
+
+        if (controls) controls.classList.remove('hidden');
+        const nameLabel = document.getElementById('live-channel-name');
+        if (nameLabel) nameLabel.textContent = name;
+
+        // 检查收藏状态
+        const favStatus = await this.call('is_live_favorite', name, url);
+        const favBtn = document.getElementById('live-fav-btn');
+        if (favBtn) {
+            favBtn.classList.toggle('favorited', favStatus.is_favorite);
+            favBtn.textContent = favStatus.is_favorite ? '已收藏' : '收藏';
+        }
+
+        if (this.liveHls) {
+            this.liveHls.destroy();
+            this.liveHls = null;
+        }
+
+        let liveErrorCount = 0;
+        if (url.includes('.m3u8') || url.includes('m3u8')) {
+            if (window.Hls && Hls.isSupported()) {
+                this.liveHls = new Hls({
+                    maxBufferLength: 10,
+                    liveSyncDuration: 3,
+                    enableWorker: true,
+                });
+                this.liveHls.loadSource(url);
+                this.liveHls.attachMedia(video);
+                this.liveHls.on(Hls.Events.MANIFEST_PARSED, () => video.play().catch(() => {}));
+                this.liveHls.on(Hls.Events.ERROR, (e, data) => {
+                    if (data.fatal) {
+                        switch (data.type) {
+                            case Hls.ErrorTypes.NETWORK_ERROR:
+                                liveErrorCount++;
+                                if (liveErrorCount > 2) {
+                                    this._tryNextLiveUrl(name);
+                                } else {
+                                    this.liveHls.startLoad();
+                                }
+                                break;
+                            case Hls.ErrorTypes.MEDIA_ERROR:
+                                this.liveHls.recoverMediaError();
+                                break;
+                            default:
+                                this._tryNextLiveUrl(name);
+                                break;
+                        }
+                    }
+                });
+            } else if (video.canPlayType('application/vnd.apple.mpegurl')) {
+                video.src = url;
+                video.play().catch(() => this._tryNextLiveUrl(name));
+            }
+        } else {
+            const proxyUrl = await this.call('build_proxy_url', url, '', '');
+            video.src = proxyUrl;
+            video.play().catch(() => {
+                this._tryNextLiveUrl(name);
+            });
+        }
+
+        // 保存直播历史
+        await this.call('add_live_history', name, url, this.currentLiveGroup || '');
+
+        // 加载 EPG
+        await this.loadEpgForChannel(name);
+    },
+
+    // 多线路备援: 尝试下一个 URL
+    async _tryNextLiveUrl(name) {
+        if (!this._liveUrls || this._liveUrlIndex === undefined) {
+            this.toast('直播流加载失败', 'error');
+            return;
+        }
+        this._liveUrlIndex++;
+        if (this._liveUrlIndex < this._liveUrls.length) {
+            const nextUrl = this._liveUrls[this._liveUrlIndex];
+            this.toast(`正在尝试备用线路 ${this._liveUrlIndex + 1}/${this._liveUrls.length}...`, '');
+            await this._playLiveUrl(nextUrl, name);
+        } else {
+            this.toast('所有线路均播放失败', 'error');
+        }
+    },
+
+    // ======== Catchup 时移 ========
+
+    _updateCatchupButton(channel) {
+        let btn = document.getElementById('live-catchup-btn');
+        const supportsCatchup = channel && (channel.catchup_source || channel.catchup_type);
+        if (!btn) {
+            if (!supportsCatchup) return;
+            btn = document.createElement('button');
+            btn.id = 'live-catchup-btn';
+            btn.className = 'btn-sm';
+            btn.title = '时移回看';
+            btn.innerHTML = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="14" height="14"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg> 时移';
+            btn.addEventListener('click', () => this.showCatchupDialog());
+            const controls = document.getElementById('live-controls');
+            if (controls) controls.appendChild(btn);
+        }
+        btn.style.display = supportsCatchup ? '' : 'none';
+        this._catchupChannel = supportsCatchup ? channel : null;
+    },
+
+    showCatchupDialog() {
+        if (!this._catchupChannel) {
+            this.toast('该频道不支持时移', 'error');
+            return;
+        }
+        const name = this._catchupChannel.name;
+        const url = this._catchupChannel.url;
+        const now = new Date();
+        const startDefault = new Date(now.getTime() - 3600000); // 默认1小时前
+        const startStr = startDefault.toISOString().slice(0, 19);
+        const endStr = now.toISOString().slice(0, 19);
+
+        const startTime = prompt('请输入开始时间 (YYYY-MM-DDTHH:MM:SS):', startStr);
+        if (!startTime) return;
+        const endTime = prompt('请输入结束时间 (YYYY-MM-DDTHH:MM:SS):', endStr);
+        if (!endTime) return;
+
+        this.playCatchup(name, url, startTime, endTime);
+    },
+
+    async playCatchup(channelName, channelUrl, startTime, endTime) {
+        try {
+            this.showLoading('构建时移地址...');
+            const result = await this.call('build_catchup_url', channelName, channelUrl, startTime, endTime);
+            this.hideLoading();
+
+            if (result && result.ok && result.url) {
+                this.toast('时移地址已生成, 正在播放...', 'success');
+                // 使用普通播放器播放时移地址
+                const area = document.getElementById('live-player-area');
+                area.innerHTML = '<video id="live-video" controls autoplay></video>';
+                const video = document.getElementById('live-video');
+
+                if (result.url.includes('.m3u8') || result.url.includes('m3u8')) {
+                    if (window.Hls && Hls.isSupported()) {
+                        if (this.liveHls) this.liveHls.destroy();
+                        this.liveHls = new Hls({ maxBufferLength: 30, enableWorker: true });
+                        this.liveHls.loadSource(result.url);
+                        this.liveHls.attachMedia(video);
+                        this.liveHls.on(Hls.Events.MANIFEST_PARSED, () => video.play().catch(() => {}));
+                    } else if (video.canPlayType('application/vnd.apple.mpegurl')) {
+                        video.src = result.url;
+                        video.play().catch(() => {});
+                    }
+                } else {
+                    video.src = result.url;
+                    video.play().catch(() => this.toast('时移播放失败', 'error'));
+                }
+            } else {
+                this.toast(result?.error || '时移地址构建失败', 'error');
+            }
+        } catch (e) {
+            this.hideLoading();
+            this.toast('时移播放失败', 'error');
+        }
     },
 
     async searchLiveChannels(keyword) {
@@ -2581,70 +3269,9 @@ const App = {
         this._renderLiveGroupList(groups, Object.keys(groups));
     },
 
+    // playLive: 兼容入口, 转发到 playLiveChannel
     async playLive(url, name) {
-        this.currentLiveChannel = { url, name };
-        const area = document.getElementById('live-player-area');
-        area.innerHTML = '<video id="live-video" controls autoplay></video>';
-        const video = document.getElementById('live-video');
-        const controls = document.getElementById('live-controls');
-
-        if (controls) controls.classList.remove('hidden');
-        const nameLabel = document.getElementById('live-channel-name');
-        if (nameLabel) nameLabel.textContent = name;
-
-        // 检查收藏状态
-        const favStatus = await this.call('is_live_favorite', name, url);
-        const favBtn = document.getElementById('live-fav-btn');
-        if (favBtn) {
-            favBtn.classList.toggle('favorited', favStatus.is_favorite);
-            favBtn.textContent = favStatus.is_favorite ? '已收藏' : '收藏';
-        }
-
-        if (this.liveHls) {
-            this.liveHls.destroy();
-            this.liveHls = null;
-        }
-
-        if (url.includes('.m3u8') || url.includes('m3u8')) {
-            if (window.Hls && Hls.isSupported()) {
-                this.liveHls = new Hls({
-                    maxBufferLength: 10,
-                    liveSyncDuration: 3,
-                    enableWorker: true,
-                });
-                this.liveHls.loadSource(url);
-                this.liveHls.attachMedia(video);
-                this.liveHls.on(Hls.Events.MANIFEST_PARSED, () => video.play().catch(() => {}));
-                this.liveHls.on(Hls.Events.ERROR, (e, data) => {
-                    if (data.fatal) {
-                        switch (data.type) {
-                            case Hls.ErrorTypes.NETWORK_ERROR:
-                                this.liveHls.startLoad();
-                                break;
-                            case Hls.ErrorTypes.MEDIA_ERROR:
-                                this.liveHls.recoverMediaError();
-                                break;
-                            default:
-                                this.toast('直播流加载失败', 'error');
-                                break;
-                        }
-                    }
-                });
-            } else if (video.canPlayType('application/vnd.apple.mpegurl')) {
-                video.src = url;
-                video.play().catch(() => {});
-            }
-        } else {
-            const proxyUrl = await this.call('build_proxy_url', url, '', '');
-            video.src = proxyUrl;
-            video.play().catch(() => this.toast('播放失败', 'error'));
-        }
-
-        // 保存直播历史
-        await this.call('add_live_history', name, url, this.currentLiveGroup || '');
-
-        // 加载 EPG
-        await this.loadEpgForChannel(name);
+        await this.playLiveChannel({ url, name }, this.liveChannelIndex);
     },
 
     switchLiveChannel(direction) {
@@ -2662,7 +3289,10 @@ const App = {
             c.classList.toggle('active', idx === newIndex);
         });
 
-        this.playLive(ch.url, ch.name);
+        // 获取完整频道信息
+        const fullChannels = this._getFullChannels(this.currentLiveGroup, this.liveChannelList);
+        const fullCh = fullChannels[newIndex] || ch;
+        this.playLiveChannel(fullCh, newIndex);
     },
 
     async toggleLiveFavorite() {

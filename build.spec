@@ -44,6 +44,8 @@ a = Analysis(
         'sniffer',
         'downloader',
         'tray',
+        'network',
+        'remote',
         # 第三方库
         'requests',
         'urllib3',

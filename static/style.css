@@ -2681,3 +2681,112 @@ kbd {
         display: none;
     }
 }
+
+/* ======== TVBox 原版 UI 补全样式 ======== */
+
+/* 1. 壁纸背景 */
+body.has-wallpaper {
+    background-image: var(--wallpaper-url);
+    background-size: cover;
+    background-position: center;
+    background-attachment: fixed;
+}
+body.has-wallpaper .sidebar {
+    backdrop-filter: blur(20px);
+    background: var(--glass-bg);
+}
+body.has-wallpaper .content {
+    backdrop-filter: blur(10px);
+    background: rgba(10, 10, 15, 0.8);
+}
+[data-theme="light"] body.has-wallpaper .content {
+    background: rgba(240, 242, 245, 0.85);
+}
+
+/* 2. 公告弹窗样式 */
+.notice-panel {
+    max-width: 480px;
+    padding: 32px;
+    text-align: center;
+}
+.notice-content {
+    margin: 16px 0 24px;
+    line-height: 1.8;
+    color: var(--text-secondary);
+    white-space: pre-wrap;
+    text-align: left;
+}
+
+/* 3. 卡片样式增强 */
+/* 椭圆形卡片 */
+.vod-card.style-oval .card-poster {
+    border-radius: 50%;
+    aspect-ratio: 1;
+}
+/* 列表样式 */
+.vod-card.style-list {
+    display: flex;
+    flex-direction: row;
+    align-items: center;
+    gap: 12px;
+}
+.vod-card.style-list .card-poster {
+    width: 80px;
+    height: 120px;
+    flex-shrink: 0;
+}
+.vod-card.style-list .card-info {
+    flex: 1;
+}
+/* 宽高比 */
+.vod-card.ratio-075 .card-poster { aspect-ratio: 3/4; }
+.vod-card.ratio-1 .card-poster { aspect-ratio: 1/1; }
+.vod-card.ratio-133 .card-poster { aspect-ratio: 4/3; }
+.vod-card.ratio-178 .card-poster { aspect-ratio: 16/9; }
+
+/* 4. 频道锁图标 */
+.group-item.locked::after {
+    content: '🔒';
+    margin-left: 6px;
+    font-size: 12px;
+}
+
+/* 5. 时移按钮高亮 */
+.live-ctrl-btn.catchup-active {
+    background: var(--accent);
+    color: white;
+}
+
+/* 6. 无痕模式指示器 */
+.nav-item.incognito-indicator::after {
+    content: '🛡';
+    position: absolute;
+    top: 4px;
+    right: 4px;
+    font-size: 10px;
+}
+
+/* 7. 多线路标签 */
+.line-tabs {
+    display: flex;
+    gap: 4px;
+    flex-wrap: wrap;
+    margin-bottom: 8px;
+}
+.line-tab {
+    padding: 4px 12px;
+    border-radius: var(--radius-sm);
+    background: var(--bg-elevated);
+    cursor: pointer;
+    font-size: 12px;
+    border: 1px solid var(--border);
+    transition: var(--transition);
+}
+.line-tab:hover {
+    border-color: var(--accent);
+}
+.line-tab.active {
+    background: var(--accent);
+    color: white;
+    border-color: var(--accent);
+}
