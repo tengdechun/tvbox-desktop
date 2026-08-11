@@ -1,0 +1,51 @@
+# UTF-8
+#
+# VS_VERSION_INFO version info file for TVBox Desktop
+#
+VSVersionInfo(
+  ffi=FixedFileInfo(
+    filevers=(5, 0, 0, 0),
+    prodvers=(5, 0, 0, 0),
+    mask=0x3f,
+    flags=0x0,
+    OS=0x40004,
+    fileType=0x1,
+    subtype=0x0,
+    date=(0, 0),
+  ),
+  kids=[
+    StringFileInfo(
+      [
+        StringTable(
+          u'080404B0',
+          [
+            StringStruct(u'CompanyName', u'TVBox Desktop'),
+            StringStruct(u'FileDescription', u'TVBox Desktop - TVBox兼容的Windows桌面播放器'),
+            StringStruct(u'FileVersion', u'5.0.0.0'),
+            StringStruct(u'InternalName', u'TVBoxDesktop'),
+            StringStruct(u'LegalCopyright', u'Copyright (C) 2024 TVBox Desktop. All rights reserved.'),
+            StringStruct(u'OriginalFilename', u'TVBoxDesktop.exe'),
+            StringStruct(u'ProductName', u'TVBox Desktop'),
+            StringStruct(u'ProductVersion', u'5.0.0.0'),
+            StringStruct(u'Comments', u'基于TVBox/CatVod配置规范的Windows桌面播放器，支持点播、直播、收藏、历史、下载等功能'),
+          ]
+        ),
+        StringTable(
+          u'040904B0',
+          [
+            StringStruct(u'CompanyName', u'TVBox Desktop'),
+            StringStruct(u'FileDescription', u'TVBox Desktop - TVBox Compatible Windows Player'),
+            StringStruct(u'FileVersion', u'5.0.0.0'),
+            StringStruct(u'InternalName', u'TVBoxDesktop'),
+            StringStruct(u'LegalCopyright', u'Copyright (C) 2024 TVBox Desktop. All rights reserved.'),
+            StringStruct(u'OriginalFilename', u'TVBoxDesktop.exe'),
+            StringStruct(u'ProductName', u'TVBox Desktop'),
+            StringStruct(u'ProductVersion', u'5.0.0.0'),
+            StringStruct(u'Comments', u'TVBox/CatVod compatible Windows desktop player with VOD, live TV, favorites, history, downloads'),
+          ]
+        ),
+      ]
+    ),
+    VarFileInfo([VarStruct(u'Translation', [0x0804, 1200, 0x0409, 1200])])
+  ]
+)

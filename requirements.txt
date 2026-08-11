@@ -1,0 +1,7 @@
+pywebview>=4.0
+requests>=2.28
+quickjs>=1.19
+pyinstaller>=5.0
+pystray>=0.19
+Pillow>=9.0
+clipboard>=0.0.4

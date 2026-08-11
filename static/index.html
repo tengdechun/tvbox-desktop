@@ -1,0 +1,628 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>TVBox Desktop</title>
+    <link rel="stylesheet" href="style.css">
+    <script src="https://cdn.jsdelivr.net/npm/hls.js@1.5.17/dist/hls.min.js"></script>
+</head>
+<body>
+    <div id="app">
+        <!-- 侧边栏 -->
+        <nav class="sidebar">
+            <div class="logo">
+                <span class="logo-text">TVBox</span>
+                <span class="logo-sub">Desktop</span>
+            </div>
+            <div class="nav-items">
+                <div class="nav-item active" data-view="home">
+                    <svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/></svg>
+                    <span>首页</span>
+                </div>
+                <div class="nav-item" data-view="search">
+                    <svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+                    <span>搜索</span>
+                </div>
+                <div class="nav-item" data-view="live">
+                    <svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="3" width="20" height="14" rx="2"/><line x1="8" y1="21" x2="16" y2="21"/><line x1="12" y1="17" x2="12" y2="21"/></svg>
+                    <span>直播</span>
+                </div>
+                <div class="nav-item" data-view="favorites">
+                    <svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z"/></svg>
+                    <span>收藏</span>
+                </div>
+                <div class="nav-item" data-view="history">
+                    <svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
+                    <span>历史</span>
+                </div>
+                <div class="nav-item" data-view="downloads">
+                    <svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+                    <span>下载</span>
+                </div>
+                <div class="nav-item" data-view="settings">
+                    <svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
+                    <span>设置</span>
+                </div>
+            </div>
+            <div class="nav-footer">
+                <div class="footer-row">
+                    <span id="config-status" class="status-badge">未加载配置</span>
+                    <button id="theme-toggle" class="theme-toggle-btn" title="切换主题">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="16" height="16"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/></svg>
+                    </button>
+                </div>
+                <div class="version-tag">v5.0</div>
+            </div>
+        </nav>
+
+        <!-- 主内容区 -->
+        <main class="content">
+            <!-- 首页 -->
+            <div id="view-home" class="view active">
+                <div class="toolbar">
+                    <div id="site-selector" class="site-selector">
+                        <span class="placeholder">请先在设置中加载配置</span>
+                    </div>
+                    <div class="toolbar-right">
+                        <div class="density-selector">
+                            <button class="density-btn active" data-density="normal" title="标准">
+                                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="16" height="16"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/></svg>
+                            </button>
+                            <button class="density-btn" data-density="compact" title="紧凑">
+                                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="16" height="16"><rect x="3" y="3" width="5" height="5"/><rect x="10" y="3" width="5" height="5"/><rect x="17" y="3" width="5" height="5"/><rect x="3" y="10" width="5" height="5"/><rect x="10" y="10" width="5" height="5"/><rect x="17" y="10" width="5" height="5"/></svg>
+                            </button>
+                            <button class="density-btn" data-density="large" title="大图">
+                                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="16" height="16"><rect x="3" y="3" width="18" height="18"/></svg>
+                            </button>
+                        </div>
+                    </div>
+                </div>
+                <div id="filter-bar" class="filter-bar"></div>
+                <div id="category-bar" class="category-bar"></div>
+                <div id="vod-grid" class="vod-grid density-normal">
+                    <div class="empty-state">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" width="64" height="64" style="opacity:0.3"><rect x="2" y="3" width="20" height="14" rx="2"/><line x1="8" y1="21" x2="16" y2="21"/></svg>
+                        <p>暂无内容</p>
+                        <p class="hint">请在设置中加载 TVBox 配置地址</p>
+                    </div>
+                </div>
+                <div id="pagination" class="pagination"></div>
+            </div>
+
+            <!-- 搜索 -->
+            <div id="view-search" class="view">
+                <div class="search-bar">
+                    <div class="search-input-wrapper">
+                        <input type="text" id="search-input" placeholder="输入关键词搜索..." autocomplete="off">
+                        <div id="search-suggestions" class="search-suggestions hidden"></div>
+                    </div>
+                    <button id="search-btn" class="btn-primary">搜索</button>
+                </div>
+                <div id="search-history-bar" class="search-history-bar"></div>
+                <div id="search-site-tabs" class="site-tabs"></div>
+                <div id="search-results" class="vod-grid density-normal">
+                    <div class="empty-state">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" width="64" height="64" style="opacity:0.3"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+                        <p>输入关键词开始搜索</p>
+                    </div>
+                </div>
+            </div>
+
+            <!-- 直播 -->
+            <div id="view-live" class="view">
+                <div class="live-toolbar">
+                    <div class="live-toolbar-left">
+                        <input type="text" id="live-search-input" placeholder="搜索频道..." class="live-search-input">
+                        <div id="live-status" class="live-status">未加载直播源</div>
+                    </div>
+                    <div class="live-toolbar-right">
+                        <div class="live-tabs">
+                            <button class="live-tab active" data-tab="all">全部</button>
+                            <button class="live-tab" data-tab="favorites">收藏</button>
+                            <button class="live-tab" data-tab="history">最近</button>
+                        </div>
+                        <button id="live-reload-btn" class="btn-sm">刷新</button>
+                    </div>
+                </div>
+                <div class="live-layout">
+                    <div class="live-sidebar">
+                        <div id="live-groups" class="live-groups"></div>
+                    </div>
+                    <div class="live-main">
+                        <div id="live-player-area" class="live-player-area">
+                            <div class="empty-state">
+                                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" width="64" height="64" style="opacity:0.3"><rect x="2" y="3" width="20" height="14" rx="2"/><line x1="8" y1="21" x2="16" y2="21"/></svg>
+                                <p>请选择左侧频道</p>
+                            </div>
+                        </div>
+                        <div id="live-controls" class="live-controls hidden">
+                            <button class="live-ctrl-btn" id="live-prev-btn" title="上一个频道">上一台</button>
+                            <button class="live-ctrl-btn" id="live-next-btn" title="下一个频道">下一台</button>
+                            <button class="live-ctrl-btn" id="live-fav-btn" title="收藏频道">收藏</button>
+                            <span id="live-channel-name" class="live-channel-label"></span>
+                        </div>
+                        <div id="live-epg" class="live-epg"></div>
+                        <div id="live-channels" class="live-channels"></div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- 收藏 -->
+            <div id="view-favorites" class="view">
+                <div class="toolbar">
+                    <h2 class="section-title">我的收藏</h2>
+                    <div class="toolbar-right">
+                        <div class="fav-tabs">
+                            <button class="fav-tab active" data-tab="vod">影视收藏</button>
+                            <button class="fav-tab" data-tab="live">直播收藏</button>
+                        </div>
+                        <button id="refresh-fav-btn" class="btn-sm">刷新</button>
+                    </div>
+                </div>
+                <div id="favorites-grid" class="vod-grid density-normal">
+                    <div class="empty-state">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" width="64" height="64" style="opacity:0.3"><path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z"/></svg>
+                        <p>暂无收藏</p>
+                        <p class="hint">在视频详情中点击收藏按钮</p>
+                    </div>
+                </div>
+            </div>
+
+            <!-- 历史 -->
+            <div id="view-history" class="view">
+                <div class="toolbar">
+                    <h2 class="section-title">播放历史</h2>
+                    <div class="toolbar-right">
+                        <div class="fav-tabs">
+                            <button class="fav-tab active" data-tab="vod">影视历史</button>
+                            <button class="fav-tab" data-tab="live">直播历史</button>
+                        </div>
+                        <button id="clear-history-btn" class="btn-sm btn-danger">清空</button>
+                    </div>
+                </div>
+                <div id="history-list" class="history-list">
+                    <div class="empty-state">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" width="64" height="64" style="opacity:0.3"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
+                        <p>暂无播放记录</p>
+                    </div>
+                </div>
+            </div>
+
+            <!-- 下载 -->
+            <div id="view-downloads" class="view">
+                <div class="toolbar">
+                    <h2 class="section-title">下载管理</h2>
+                    <div class="download-toolbar">
+                        <button id="clear-completed-btn" class="btn-sm">清除已完成</button>
+                        <button id="open-dl-folder-btn" class="btn-sm">打开文件夹</button>
+                        <button id="refresh-downloads-btn" class="btn-sm">刷新</button>
+                    </div>
+                </div>
+                <div id="download-stats" class="download-stats" style="margin: 8px 20px;"></div>
+                <div id="downloads-list" class="downloads-list">
+                    <div class="empty-state">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" width="64" height="64" style="opacity:0.3"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+                        <p>暂无下载任务</p>
+                        <p class="hint">在播放器中点击下载按钮</p>
+                    </div>
+                </div>
+            </div>
+
+            <!-- 设置 -->
+            <div id="view-settings" class="view">
+                <div class="settings-panel">
+                    <h2>配置管理</h2>
+                    <div class="form-group">
+                        <label>TVBox 配置地址</label>
+                        <div class="input-row">
+                            <input type="text" id="config-url" placeholder="https://example.com/config.json" class="input-full">
+                            <button id="load-config-btn" class="btn-primary">加载</button>
+                        </div>
+                        <p class="form-hint">支持 TVBox / FongMi 格式的 JSON 配置地址, 也支持本地文件路径</p>
+                    </div>
+                    <div id="saved-configs" class="saved-list"></div>
+
+                    <h2>直播源管理</h2>
+                    <div class="form-group">
+                        <label>直播源地址</label>
+                        <div class="input-row">
+                            <input type="text" id="live-url" placeholder="https://example.com/live.m3u" class="input-full">
+                            <button id="load-live-btn" class="btn-primary">加载</button>
+                        </div>
+                        <div class="input-row" style="margin-top:8px">
+                            <label class="radio-label"><input type="radio" name="live-type" value="0" checked> M3U</label>
+                            <label class="radio-label"><input type="radio" name="live-type" value="1"> TXT</label>
+                            <label class="radio-label"><input type="radio" name="live-type" value="2"> JSON</label>
+                            <label class="radio-label"><input type="radio" name="live-type" value="-1"> 自动</label>
+                        </div>
+                        <p class="form-hint">支持 M3U / TXT(#genre#) / JSON 格式</p>
+                    </div>
+                    <div class="form-group">
+                        <label>EPG 节目单地址 (可选)</label>
+                        <div class="input-row">
+                            <input type="text" id="epg-url" placeholder="https://example.com/epg.xml.gz" class="input-full">
+                            <button id="load-epg-btn" class="btn-primary">加载</button>
+                        </div>
+                        <p class="form-hint">XMLTV 格式, 支持 .gz 压缩</p>
+                    </div>
+                    <div id="saved-lives" class="saved-list"></div>
+
+                    <h2>播放设置</h2>
+                    <div class="form-group">
+                        <label>默认播放速度</label>
+                        <div class="input-row">
+                            <select id="default-speed" class="input-full">
+                                <option value="0.5">0.5x</option>
+                                <option value="0.75">0.75x</option>
+                                <option value="1" selected>1.0x (正常)</option>
+                                <option value="1.25">1.25x</option>
+                                <option value="1.5">1.5x</option>
+                                <option value="2">2.0x</option>
+                                <option value="3">3.0x</option>
+                            </select>
+                            <button id="save-speed-btn" class="btn-primary">保存</button>
+                        </div>
+                    </div>
+                    <div class="form-group">
+                        <label>自动连播</label>
+                        <div class="input-row">
+                            <label class="switch-label">
+                                <input type="checkbox" id="auto-next-toggle" checked>
+                                <span class="switch-slider"></span>
+                                <span>播放完当前集自动播放下一集</span>
+                            </label>
+                        </div>
+                    </div>
+                    <div class="form-group">
+                        <label>进度记忆</label>
+                        <div class="input-row">
+                            <label class="switch-label">
+                                <input type="checkbox" id="resume-toggle" checked>
+                                <span class="switch-slider"></span>
+                                <span>恢复上次播放进度</span>
+                            </label>
+                        </div>
+                    </div>
+
+                    <h2>界面设置</h2>
+                    <div class="form-group">
+                        <label>主题模式</label>
+                        <div class="input-row">
+                            <select id="theme-select" class="input-full">
+                                <option value="dark" selected>深色主题</option>
+                                <option value="light">浅色主题</option>
+                                <option value="auto">跟随系统</option>
+                            </select>
+                            <button id="save-theme-btn" class="btn-primary">保存</button>
+                        </div>
+                    </div>
+
+                    <h2>系统设置</h2>
+                    <div class="settings-section">
+                        <div class="settings-row">
+                            <span class="settings-row-label">开机自启动</span>
+                            <div class="settings-row-value">
+                                <label class="switch-label">
+                                    <input type="checkbox" id="autostart-toggle">
+                                    <span class="switch-slider"></span>
+                                </label>
+                            </div>
+                        </div>
+                        <div class="settings-row">
+                            <span class="settings-row-label">最小化到系统托盘</span>
+                            <div class="settings-row-value">
+                                <label class="switch-label">
+                                    <input type="checkbox" id="minimize-tray-toggle">
+                                    <span class="switch-slider"></span>
+                                </label>
+                            </div>
+                        </div>
+                        <div class="settings-row">
+                            <span class="settings-row-label">窗口置顶</span>
+                            <div class="settings-row-value">
+                                <label class="switch-label">
+                                    <input type="checkbox" id="always-on-top-toggle">
+                                    <span class="switch-slider"></span>
+                                </label>
+                            </div>
+                        </div>
+                    </div>
+
+                    <h2>下载设置</h2>
+                    <div class="settings-section">
+                        <div class="settings-row">
+                            <span class="settings-row-label">下载线程数</span>
+                            <div class="settings-row-value">
+                                <select id="download-threads" style="padding:4px 8px;border-radius:4px;background:var(--bg-input);color:var(--text-primary);border:1px solid var(--border);">
+                                    <option value="1">单线程</option>
+                                    <option value="2">2线程</option>
+                                    <option value="4" selected>4线程</option>
+                                    <option value="8">8线程</option>
+                                </select>
+                            </div>
+                        </div>
+                        <div class="settings-row">
+                            <span class="settings-row-label">下载限速 (KB/s)</span>
+                            <div class="settings-row-value">
+                                <input type="number" id="download-speed-limit" placeholder="0=不限" min="0" style="width:80px;padding:4px 8px;border-radius:4px;background:var(--bg-input);color:var(--text-primary);border:1px solid var(--border);">
+                                <button id="save-speed-limit-btn" class="btn-sm">设置</button>
+                            </div>
+                        </div>
+                    </div>
+
+                    <h2>解析器</h2>
+                    <div id="parse-list" class="parse-list">
+                        <p class="form-hint">解析器在配置加载后自动显示</p>
+                    </div>
+
+                    <h2>站点管理</h2>
+                    <div id="site-management" class="site-management">
+                        <p class="form-hint">加载配置后可管理站点</p>
+                    </div>
+
+                    <h2>配置备份</h2>
+                    <div class="form-group">
+                        <div class="input-row">
+                            <button id="export-config-btn" class="btn-primary">导出配置</button>
+                            <button id="import-config-btn" class="btn-primary">导入配置</button>
+                        </div>
+                        <p class="form-hint">导出配置地址、直播源、收藏、设置等,方便迁移或备份</p>
+                    </div>
+                    <input type="file" id="import-config-file" accept=".json" style="display:none">
+
+                    <h2>快捷键</h2>
+                    <div class="shortcuts-info">
+                        <div class="shortcut-row"><kbd>空格</kbd> 播放/暂停</div>
+                        <div class="shortcut-row"><kbd>&larr;</kbd> / <kbd>&rarr;</kbd> 快退/快进 10秒</div>
+                        <div class="shortcut-row"><kbd>&uarr;</kbd> / <kbd>&darr;</kbd> 音量增减</div>
+                        <div class="shortcut-row"><kbd>F</kbd> 全屏切换</div>
+                        <div class="shortcut-row"><kbd>N</kbd> 下一集</div>
+                        <div class="shortcut-row"><kbd>P</kbd> 上一集</div>
+                        <div class="shortcut-row"><kbd>M</kbd> 静音</div>
+                        <div class="shortcut-row"><kbd>D</kbd> 弹幕开关</div>
+                        <div class="shortcut-row"><kbd>R</kbd> 画面比例切换</div>
+                        <div class="shortcut-row"><kbd>S</kbd> 截图</div>
+                        <div class="shortcut-row"><kbd>Esc</kbd> 退出全屏/关闭播放器</div>
+                        <div class="shortcut-row"><kbd>双击</kbd> 全屏切换</div>
+                        <div class="shortcut-row"><kbd>滚轮</kbd> 音量调节</div>
+                        <div class="shortcut-row"><kbd>右键</kbd> 播放器菜单</div>
+                    </div>
+
+                    <h2>关于</h2>
+                    <div class="about-info">
+                        <p><strong>TVBox Desktop</strong> v5.0.0</p>
+                        <p>基于 TVBox / CatVod 配置规范的 Windows 桌面播放器</p>
+                        <p>支持 Type0(API) / Type4(JS) 源, HLS/直链播放, 历史记录, 收藏, EPG, 解析器, 下载管理</p>
+                        <p>弹幕支持, 字幕加载, 画面比例切换, 视频截图, 外部播放器, 配置导入导出, 站点管理</p>
+                        <p>系统托盘, 开机自启, 多线程下载, 断点续传, 批量下载, AB回放, 循环播放, 窗口置顶</p>
+                    </div>
+                </div>
+            </div>
+        </main>
+    </div>
+
+    <!-- 详情弹窗 -->
+    <div id="detail-modal" class="modal hidden">
+        <div class="modal-backdrop"></div>
+        <div class="modal-content detail-panel">
+            <button class="modal-close" onclick="App.closeDetail()">&times;</button>
+            <div id="detail-body" class="detail-body"></div>
+        </div>
+    </div>
+
+    <!-- 播放器弹窗 -->
+    <div id="player-modal" class="modal hidden">
+        <div class="modal-backdrop"></div>
+        <div class="modal-content player-panel">
+            <button class="modal-close" onclick="App.closePlayer()">&times;</button>
+            <div class="player-wrapper" id="player-wrapper">
+                <video id="video-player" autoplay></video>
+                <!-- AB回放指示器 -->
+                <div id="ab-repeat-indicator" class="ab-repeat-indicator hidden">
+                    <span>AB回放</span>
+                    <span id="ab-repeat-info">A: --:-- / B: --:--</span>
+                </div>
+                <!-- 循环播放指示器 -->
+                <div id="loop-indicator" class="loop-indicator hidden">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="14" height="14"><polyline points="17 1 21 5 17 9"/><path d="M3 11V9a4 4 0 0 1 4-4h14"/><polyline points="7 23 3 19 7 15"/><path d="M21 13v2a4 4 0 0 1-4 4H3"/></svg>
+                    <span id="loop-mode-text">循环</span>
+                </div>
+                <!-- 加载缓冲指示器 -->
+                <div id="player-buffering" class="player-buffering hidden">
+                    <div class="buffering-spinner"></div>
+                </div>
+                <!-- 弹幕层 -->
+                <canvas id="danmaku-canvas" class="danmaku-canvas"></canvas>
+                <!-- 字幕层 -->
+                <div id="subtitle-layer" class="subtitle-layer"></div>
+                <!-- 视频信息覆盖层 -->
+                <div id="video-info-overlay" class="video-info-overlay hidden">
+                    <span id="video-info-text"></span>
+                </div>
+                <!-- 播放器右键菜单 -->
+                <div id="player-context-menu" class="player-context-menu hidden">
+                    <div class="pcm-item" data-action="screenshot">截图</div>
+                    <div class="pcm-item" data-action="subtitle">加载字幕</div>
+                    <div class="pcm-item" data-action="danmaku">弹幕设置</div>
+                    <div class="pcm-sep"></div>
+                    <div class="pcm-item pcm-submenu">画面比例
+                        <div class="pcm-submenu-list">
+                            <div class="pcm-item" data-action="ratio" data-val="default">默认</div>
+                            <div class="pcm-item" data-action="ratio" data-val="16:9">16:9</div>
+                            <div class="pcm-item" data-action="ratio" data-val="4:3">4:3</div>
+                            <div class="pcm-item" data-action="ratio" data-val="stretch">拉伸</div>
+                            <div class="pcm-item" data-action="ratio" data-val="original">原始</div>
+                        </div>
+                    </div>
+                    <div class="pcm-item pcm-submenu">播放速度
+                        <div class="pcm-submenu-list">
+                            <div class="pcm-item" data-action="speed" data-val="0.5">0.5x</div>
+                            <div class="pcm-item" data-action="speed" data-val="0.75">0.75x</div>
+                            <div class="pcm-item" data-action="speed" data-val="1">1.0x</div>
+                            <div class="pcm-item" data-action="speed" data-val="1.25">1.25x</div>
+                            <div class="pcm-item" data-action="speed" data-val="1.5">1.5x</div>
+                            <div class="pcm-item" data-action="speed" data-val="2">2.0x</div>
+                            <div class="pcm-item" data-action="speed" data-val="3">3.0x</div>
+                        </div>
+                    </div>
+                    <div class="pcm-sep"></div>
+                    <div class="pcm-item" data-action="external">用外部播放器打开</div>
+                    <div class="pcm-item" data-action="copy-url">复制播放地址</div>
+                </div>
+                <!-- 自定义进度条 -->
+                <div class="player-progress-bar" id="player-progress-bar">
+                    <div class="progress-buffered" id="progress-buffered"></div>
+                    <div class="progress-played" id="progress-played"></div>
+                    <div class="progress-thumb" id="progress-thumb"></div>
+                </div>
+                <!-- 播放器控制条 -->
+                <div class="player-controls">
+                    <div class="player-controls-left">
+                        <button class="player-ctrl-btn" onclick="App.togglePlay()" title="播放/暂停 (空格)" id="play-btn">
+                            <svg viewBox="0 0 24 24" fill="currentColor" width="18" height="18"><polygon points="5 3 19 12 5 21 5 3"/></svg>
+                        </button>
+                        <button class="player-ctrl-btn" onclick="App.seek(-10)" title="快退10秒">
+                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="18" height="18"><polygon points="19 20 9 12 19 4 19 20"/><line x1="5" y1="19" x2="5" y2="5"/></svg>
+                        </button>
+                        <button class="player-ctrl-btn" onclick="App.seek(10)" title="快进10秒">
+                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="18" height="18"><polygon points="5 4 15 12 5 20 5 4"/><line x1="19" y1="5" x2="19" y2="19"/></svg>
+                        </button>
+                        <button class="player-ctrl-btn" onclick="App.prevEpisode()" title="上一集 (P)" id="prev-ep-btn">
+                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="18" height="18"><polygon points="18 17 10 12 18 7 18 17"/><polygon points="9 17 1 12 9 7 9 17"/></svg>
+                        </button>
+                        <button class="player-ctrl-btn" onclick="App.nextEpisode()" title="下一集 (N)" id="next-ep-btn">
+                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="18" height="18"><polygon points="6 17 14 12 6 7 6 17"/><polygon points="15 17 23 12 15 7 15 17"/></svg>
+                        </button>
+                        <div class="volume-control">
+                            <button class="player-ctrl-btn" onclick="App.toggleMute()" title="静音 (M)" id="mute-btn">
+                                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="18" height="18"><polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"/><path d="M19.07 4.93a10 10 0 0 1 0 14.14M15.54 8.46a5 5 0 0 1 0 7.07"/></svg>
+                            </button>
+                            <input type="range" id="volume-slider" min="0" max="100" value="100" class="volume-slider">
+                        </div>
+                        <span class="player-time" id="player-current-time">00:00</span>
+                        <span class="player-time-sep">/</span>
+                        <span class="player-time" id="player-duration">00:00</span>
+                    </div>
+                    <div class="player-controls-right">
+                        <div class="speed-group">
+                            <button class="player-ctrl-btn speed-btn" onclick="App.setSpeed(0.5)">0.5x</button>
+                            <button class="player-ctrl-btn speed-btn" onclick="App.setSpeed(0.75)">0.75x</button>
+                            <button class="player-ctrl-btn speed-btn active" onclick="App.setSpeed(1)">1x</button>
+                            <button class="player-ctrl-btn speed-btn" onclick="App.setSpeed(1.25)">1.25x</button>
+                            <button class="player-ctrl-btn speed-btn" onclick="App.setSpeed(1.5)">1.5x</button>
+                            <button class="player-ctrl-btn speed-btn" onclick="App.setSpeed(2)">2x</button>
+                            <button class="player-ctrl-btn speed-btn" onclick="App.setSpeed(3)">3x</button>
+                        </div>
+                        <span class="player-sep"></span>
+                        <button class="player-ctrl-btn" onclick="App.toggleDanmaku()" title="弹幕开关" id="danmaku-btn">
+                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="18" height="18"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
+                        </button>
+                        <button class="player-ctrl-btn" onclick="App.loadSubtitle()" title="字幕">
+                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="18" height="18"><rect x="2" y="3" width="20" height="14" rx="2"/><line x1="7" y1="11" x2="11" y2="11"/><line x1="13" y1="11" x2="17" y2="11"/></svg>
+                        </button>
+                        <button class="player-ctrl-btn" onclick="App.screenshot()" title="截图">
+                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="18" height="18"><path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/><circle cx="12" cy="13" r="4"/></svg>
+                        </button>
+                        <button class="player-ctrl-btn" onclick="App.toggleAspectRatio()" title="画面比例" id="ratio-btn">
+                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="18" height="18"><rect x="2" y="4" width="20" height="16" rx="2"/></svg>
+                        </button>
+                        <button class="player-ctrl-btn" onclick="App.toggleAutoNext()" title="自动连播" id="auto-next-btn">
+                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="18" height="18"><polygon points="6 17 14 12 6 7 6 17"/><polygon points="15 17 23 12 15 7 15 17"/></svg>
+                        </button>
+                        <button class="player-ctrl-btn" onclick="App.togglePiP()" title="画中画">
+                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="18" height="18"><rect x="2" y="3" width="20" height="14" rx="2"/><rect x="12" y="9" width="8" height="5" rx="1"/></svg>
+                        </button>
+                        <button class="player-ctrl-btn" onclick="App.openExternalPlayer()" title="外部播放器">
+                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="18" height="18"><polyline points="15 3 21 3 21 9"/><polyline points="9 21 3 21 3 15"/><line x1="21" y1="3" x2="14" y2="10"/><line x1="3" y1="21" x2="10" y2="14"/></svg>
+                        </button>
+                        <button class="player-ctrl-btn" onclick="App.toggleFullscreen()" title="全屏 (F)" id="fullscreen-btn">
+                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="18" height="18"><path d="M8 3H5a2 2 0 0 0-2 2v3m18 0V5a2 2 0 0 0-2-2h-3m0 18h3a2 2 0 0 0 2-2v-3M3 16v3a2 2 0 0 0 2 2h3"/></svg>
+                        </button>
+                        <button class="player-ctrl-btn" onclick="App.downloadCurrent()" title="下载">
+                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="18" height="18"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+                        </button>
+                    </div>
+                </div>
+            </div>
+            <div id="player-info" class="player-info"></div>
+            <div id="player-episodes" class="player-episodes"></div>
+        </div>
+    </div>
+
+    <!-- 弹幕设置弹窗 -->
+    <div id="danmaku-settings-modal" class="modal hidden">
+        <div class="modal-backdrop"></div>
+        <div class="modal-content danmaku-settings-panel">
+            <button class="modal-close" onclick="document.getElementById('danmaku-settings-modal').classList.add('hidden')">&times;</button>
+            <h2>弹幕设置</h2>
+            <div class="form-group">
+                <label>弹幕来源</label>
+                <div class="input-row">
+                    <input type="text" id="danmaku-url-input" placeholder="输入弹幕API地址或搜索关键词" class="input-full">
+                    <button id="search-danmaku-btn" class="btn-primary">搜索</button>
+                </div>
+                <p class="form-hint">支持 dandanplay API 或输入动漫名称搜索</p>
+            </div>
+            <div class="form-group">
+                <label>弹幕透明度</label>
+                <input type="range" id="danmaku-opacity" min="10" max="100" value="70" class="input-full">
+            </div>
+            <div class="form-group">
+                <label>弹幕速度</label>
+                <select id="danmaku-speed" class="input-full">
+                    <option value="slow">慢速</option>
+                    <option value="normal" selected>正常</option>
+                    <option value="fast">快速</option>
+                </select>
+            </div>
+            <div class="form-group">
+                <label>弹幕字号</label>
+                <select id="danmaku-size" class="input-full">
+                    <option value="small">小</option>
+                    <option value="medium" selected>中</option>
+                    <option value="large">大</option>
+                </select>
+            </div>
+            <div id="danmaku-search-results" class="danmaku-search-results"></div>
+        </div>
+    </div>
+
+    <!-- 右键菜单 -->
+    <div id="context-menu" class="context-menu hidden">
+        <div class="context-menu-item" data-action="play">播放</div>
+        <div class="context-menu-item" data-action="detail">详情</div>
+        <div class="context-menu-item" data-action="favorite">收藏</div>
+        <div class="context-menu-item" data-action="download">下载</div>
+        <div class="context-menu-item" data-action="batch-download">批量下载</div>
+    </div>
+
+    <!-- 批量下载弹窗 -->
+    <div id="batch-download-modal" class="modal hidden">
+        <div class="modal-backdrop"></div>
+        <div class="modal-content batch-download-panel">
+            <button class="modal-close" onclick="document.getElementById('batch-download-modal').classList.add('hidden')">&times;</button>
+            <h2>批量下载</h2>
+            <div class="form-group">
+                <div class="input-row">
+                    <button id="select-all-eps-btn" class="btn-sm">全选</button>
+                    <button id="deselect-all-eps-btn" class="btn-sm">取消全选</button>
+                    <button id="start-batch-download-btn" class="btn-primary" style="margin-left:auto;">开始下载</button>
+                </div>
+            </div>
+            <div id="batch-episode-list" class="batch-episode-list"></div>
+        </div>
+    </div>
+
+    <!-- 加载指示器 -->
+    <div id="loading" class="loading hidden">
+        <div class="spinner"></div>
+        <p id="loading-text">加载中...</p>
+    </div>
+
+    <!-- Toast 容器 -->
+    <div id="toast-container" class="toast-container"></div>
+
+    <script src="app.js"></script>
+</body>
+</html>
